@@ -17,7 +17,7 @@
  * @module dsh-improve-prompt
  */
 
-import z from 'schemastery'
+import z from '@deepseek-ai/schemastery'
 import { resolveConfig, type Mode, type ResolvedConfig } from './config.js'
 import { improveDraft, ERR, type ImproveDeps, type SessionsFace } from './orchestrate.js'
 import type { LlmFace, Route } from './llm-call.js'

@@ -1,6 +1,6 @@
 {
   "name": "dsh-improve-prompt",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "一键把输入框草稿改写为更清晰、更贴 Agent 执行的提示词：直接替换 + 一键撤回，带保真闸与长度闸。",
   "publishConfig": {
     "access": "public"
@@ -38,7 +38,7 @@
     "@deepseek-ai/dsh-llm": ">=0.1.0-rc <2",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc <2",
     "cordis": ">=4.0.0-rc <5",
-    "schemastery": "^3.18.0"
+    "@deepseek-ai/schemastery": "^3.18.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

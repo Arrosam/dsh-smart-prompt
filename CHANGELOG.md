@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+
+修复在新版 DSH（0.2.x，实测 0.2.1-alpha.2）上宿主半边无法加载（`dsh-improve-prompt: failed to import`）：
+
+- **`schemastery` → `@deepseek-ai/schemastery`**：`src/config.ts`（及 `src/index.ts`）原先 import 裸包名 `schemastery`，但 DSH 宿主与 profile 只提供带作用域的 `@deepseek-ai/schemastery`（profile 默认 `autoInstallPeers: false`，不会补装裸包），于是 `ERR_MODULE_NOT_FOUND`、插件整体不激活。现改为与其他官方/社区插件一致的 `@deepseek-ai/schemastery`，peerDependencies 与 `scripts/build.sh` 的链接同步改名。
+- 91/91 单测、双端 typecheck 通过；在 0.2.1-alpha.2 的 profile 中 `import('dsh-improve-prompt')` 恢复正常。
+
 ## 0.7.2
 
 深思考模型适配（GLM-5.3-flash @ effort=max 实测驱动，2026-09-24）：默认模型切到深思考后，「点击无结果」高频复现——单次 90 字改写实测耗时 50.5s（占 60s 超时预算 84%），草稿稍复杂即 `TIMEOUT`；思考 token 计入 completion 上限，复杂草稿可烧光 2000 token 报 `EMPTY`。

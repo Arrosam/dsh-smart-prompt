@@ -3,7 +3,7 @@
  *
  * @module dsh-improve-prompt/config
  */
-import z from 'schemastery';
+import z from '@deepseek-ai/schemastery';
 /** Enhancement mode. */
 export type Mode = 'light' | 'standard';
 /** Runtime configuration after defaults are applied. */

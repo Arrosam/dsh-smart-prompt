@@ -6,7 +6,7 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import z from 'schemastery'
+import z from '@deepseek-ai/schemastery'
 
 /** Enhancement mode. */
 export type Mode = 'light' | 'standard'

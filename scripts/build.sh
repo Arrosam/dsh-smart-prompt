@@ -40,7 +40,7 @@ if [ "$HAVE_CHECKOUT" = 1 ]; then
   node -e "const fs=require('fs');fs.rmSync('node_modules/@standard-schema',{recursive:true,force:true})"
   mk_link node_modules/cordis "$CHECKOUT/vendor/cordis"
   mk_link node_modules/cosmokit "$CHECKOUT/vendor/cosmokit"
-  mk_link node_modules/schemastery "$CHECKOUT/vendor/schemastery"
+  mk_link node_modules/@deepseek-ai/schemastery "$CHECKOUT/vendor/schemastery"
   mk_link node_modules/@deepseek-ai/dsh-tools "$CHECKOUT/packages/core/tools"
   mk_link node_modules/@deepseek-ai/dsh-llm "$CHECKOUT/packages/llm/llm"
   mk_link node_modules/@deepseek-ai/dsh-system-prompt "$CHECKOUT/packages/core/system-prompt"
@@ -75,7 +75,6 @@ else
     [ -e "node_modules/@deepseek-ai/$name" ] || mk_link "node_modules/@deepseek-ai/$name" "$pkg"
   done
   mk_link node_modules/cordis "$NPM_ROOT/node_modules/@deepseek-ai/cordis"
-  mk_link node_modules/schemastery "$NPM_ROOT/node_modules/@deepseek-ai/schemastery"
   mk_link node_modules/@types/node "$NPM_ROOT/node_modules/@types/node"
   [ -e node_modules/@standard-schema ] || mk_link node_modules/@standard-schema "$NPM_ROOT/node_modules/@standard-schema"
   echo "=== Compiling src to lib (self-contained) ==="
