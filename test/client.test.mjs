@@ -123,7 +123,7 @@ test('the button renders enabled with a draft and disabled on an empty composer 
   const enabled = await mount(button, seatProps())
   const enabledBtn = enabled.root.findAllByProps({ className: 'dip-btn' })[0]
   assert.equal(enabledBtn.props.disabled, false)
-  assert.equal(enabled.root.findAllByProps({ className: 'dip-chevron' }).length, 1)
+  assert.equal(enabled.root.findAllByProps({ className: 'dip-chevron' }).length, 0, 'no mode switch on the button')
 
   const empty = await mount(button, seatProps({ draft: '   ' }))
   assert.equal(empty.root.findAllByProps({ className: 'dip-btn' })[0].props.disabled, true)
@@ -324,7 +324,6 @@ test('pressing any chip button does not take focus from the composer', async () 
       return prevented
     }
     assert.equal(pressed('dip-btn'), true, 'main button keeps the caret in the composer')
-    assert.equal(pressed('dip-chevron'), true, 'mode switch keeps the caret in the composer')
     await TestRenderer.act(async () => { await live.find('dip-btn')[0].props.onClick() })
     await live.rerender()
     assert.equal(pressed('dip-revert'), true)
@@ -376,18 +375,6 @@ test('the status bar renders nothing while idle', async () => {
   assert.equal(renderer.toJSON(), null)
 })
 
-test('the mode chevron switches between light and standard and remembers it', async () => {
-  const { button } = await boot()
-  const renderer = await mount(button, seatProps())
-  const buttons = renderer.root.findAllByType('button')
-  const chevron = buttons.find((b) => b.props.className === 'dip-chevron')
-  await TestRenderer.act(async () => { chevron.props.onClick() })
-  assert.equal(globalThis.window.localStorage.getItem('dsh-improve-prompt:mode'), 'light')
-  const active = renderer.root.findAllByProps({ className: 'dip-label-text' }).filter((n) => n.props['data-active'] === 'true')
-  assert.deepEqual(active.map((n) => n.props.children), ['modeLight'], 'the label follows the stored mode')
-  assert.equal(renderer.root.findAllByProps({ className: 'dip-label-text' }).length, 2, 'both names stay rendered so the width never changes')
-})
-
 test('a cancellation aborts the in-flight request instead of writing anything', async () => {
   const { button } = await boot()
   let seenSignal = null
@@ -407,109 +394,32 @@ test('a cancellation aborts the in-flight request instead of writing anything', 
   }
 })
 
-test('the chip carries both zones, light layers span it, and each zone ink is topmost', async () => {
+test('the button is a single action: one capsule holding only the sparkle', async () => {
   const { button } = await boot()
   const renderer = await mount(button, seatProps())
 
   const chip = renderer.root.findAllByProps({ className: 'dip-root' })
   assert.equal(chip.length, 1)
-  // the chip's direct children: contained light, rim light, progress bar, switch zone,
-  // hairline divider, main zone (rightmost, under the pinned edge) — one plate, two zones
   const chipChildren = chip[0].children.map((c) => (typeof c === 'string' ? c : c.props.className))
-  assert.deepEqual(chipChildren, ['dip-aurora', 'dip-ring', 'dip-arc', 'dip-chevron', 'dip-divider', 'dip-btn', 'dip-burst'])
+  assert.deepEqual(chipChildren, ['dip-btn'], 'no mode switch, divider or decoration layers')
 
-  // inside the main zone: spark, icon, label (label is the topmost of the zone)
-  const pill = renderer.root.findAllByProps({ className: 'dip-btn' })[0]
-  const inner = pill.children.map((c) => (typeof c === 'string' ? c : c.props.className))
-  assert.deepEqual(inner, ['dip-spark', 'dip-icon', 'dip-label'])
-
-  // the switch zone owns its own ink span
-  const chevron = renderer.root.findAllByProps({ className: 'dip-chevron' })[0]
-  const chevronChildren = chevron.children.map((c) => (typeof c === 'string' ? c : c.props.className))
-  assert.deepEqual(chevronChildren, ['dip-caret'])
-
-  for (const decor of ['dip-aurora', 'dip-ring', 'dip-arc', 'dip-spark', 'dip-divider', 'dip-caret', 'dip-burst']) {
-    const el = renderer.root.findAllByProps({ className: decor })[0]
-    assert.equal(el.props['aria-hidden'], 'true', decor + ' is decoration, never content')
-  }
+  const main = renderer.root.findAllByProps({ className: 'dip-btn' })[0]
+  assert.deepEqual(main.children.map((c) => (typeof c === 'string' ? c : c.props.className)), ['dip-icon'], 'icon only, no mode label')
+  assert.equal(main.props['aria-label'], 'buttonAria', 'the accessible name no longer names a mode')
+  assert.equal(renderer.root.findAllByProps({ className: 'dip-icon' })[0].props['aria-hidden'], 'true')
+  assert.ok(!JSON.stringify(renderer.toJSON()).includes('dip-spark-grad'), 'the icon has no gradient')
 })
 
-test('the stylesheet keeps the guarantees the legibility check relies on', async () => {
+test('the stylesheet is a plain capsule in host tokens', async () => {
   const fs = await import('node:fs')
   const css = fs.readFileSync(new URL('../src/client/styles.ts', import.meta.url), 'utf8')
 
-  // containment: the chip clips, so no inside layer can escape it, and the aurora is inset:0
-  assert.match(css, /\.dip-root\{[^}]*overflow:hidden/)
-  assert.match(css, /\.dip-aurora\{position:absolute;inset:0/)
-  assert.match(css, /\.dip-ring\{position:absolute;inset:0/)
-  // no light layer outside the pill: no bloom rule, no blend modes
-  assert.ok(!/\.dip-bloom\{/.test(css), 'no layer outside the pill')
-  assert.ok(!/mix-blend-mode/.test(css), 'no blend modes on the light layers')
-
-  // the chip speaks the dsh-plan-board language: dark glass plate + four-stop gradient rim
-  assert.match(css, /padding-box/, 'plate and rim are two layers of one background')
-  // the rim is CONIC, not linear: a linear ramp only shows its first quarter on a 66px chip
-  assert.match(css, /RIM = 'conic-gradient\(/, 'the rim is width-independent')
-  assert.match(css, /PLATE = 'linear-gradient\(135deg,#061024/, 'the plate is the dark navy glass')
-  assert.match(css, /INK = '#f2f7ff'/, 'near-white ink is what makes it readable in both themes')
-  // the plate never swaps by theme or by a mode attribute on the chip itself —
-  // [data-mode] legitimately exists ONLY on the collapsed-state mode badge
-  assert.ok(!/prefers-color-scheme/.test(css), 'no theme-conditional styles')
-  assert.ok(!/\.dip-root\[data-mode|\.dip-btn\[data-mode/.test(css), 'the plate does not invert per theme')
-  // and the palette is this plugin's own: cyan/blue with a gold accent, NOT the reference
-  // plugin's violet/magenta ramp (its craft was borrowed, its colours were not)
-  assert.ok(!/#8b5cf6|#e879f9|#a855f7|#7c3aed|#e879f9/.test(css), 'no borrowed violet/magenta hues')
-
-  // the label owns a stacking level above every light layer
-  assert.match(css, /\.dip-label\{position:relative;z-index:2/)
-
-  // the progress bar hugs the bottom edge and stays short, so it cannot reach the label box
-  assert.match(css, /\.dip-arc\{position:absolute;left:0;right:0;bottom:(\d+)px;height:(\d+)px/)
-  const barBottom = Number(/\.dip-arc\{position:absolute;left:0;right:0;bottom:(\d+)px/.exec(css)?.[1])
-  const barHeight = Number(/bottom:\d+px;height:(\d+)px/.exec(css)?.[1])
-  assert.ok(barHeight <= 3, 'the bar stays a hairline, got ' + String(barHeight) + 'px')
-  // pill is 28px tall with the label vertically centred; the bar lives in the last few px
-  assert.ok(barBottom + barHeight <= 4, 'the bar hugs the bottom edge')
-
-  // and busy must be visibly different from hover, not just faster
-  assert.match(css, /@keyframes dip-sweep/, 'busy has its own sweeping progress bar')
-  assert.match(css, /@keyframes dip-charge/, 'busy has its own charging breath')
-  assert.match(css, /\.dip-root\[data-busy="true"\]\{animation:dip-charge/, 'the chip itself charges while busy')
-
-  // the fusion contract: a hairline divider and a real switch zone on the same plate
-  assert.match(css, /\.dip-divider\{position:relative;z-index:2;width:1px;/, 'the divider is a 1px hairline')
-  assert.match(css, /\.dip-divider\{[^}]*linear-gradient\(180deg,transparent/, 'the divider fades at both ends')
-  assert.match(css, /\.dip-chevron\{position:relative;z-index:2;flex:none;width:24px;height:28px;/,
-    'the switch zone is a 24x28 hit target on the plate')
-  assert.match(css, /\.dip-caret\{display:block;flex:none;/,
-    'the caret is drawn by code at a known size')
-  assert.match(css, /CARET = '#cfe4ff'/, 'the caret speaks the same light ink as the label')
-  // the switch zone carries its own light pool so the fusion reads as one object
-  assert.match(css, /at 4% 46%,rgba\(43,108,255,\.44\)/, 'the switch zone owns a light pool')
-
-  // v7 collapse contract: content technique, never chip scaling
-  assert.match(css, /\.dip-label\{[^}]*max-width:0/, 'the label collapses to zero width')
-  // the expansion selector is built at runtime from the EXPANDED const — assert its
-  // definition and its use on the label, not a concatenated string that never exists
-  // in this file (the stylesheet test runs against the SOURCE text)
-  assert.match(css, /const EXPANDED = '\.dip-root:is\(:hover,:has\(:focus-visible\),\[data-busy="true"\]\)'/,
-    'expansion applies on hover, keyboard focus and busy')
-  assert.match(css, /EXPANDED \+ ' \.dip-label\{max-width:64px/, 'hover/focus/busy expand the label')
-  assert.ok(!/\.dip-root:hover\{[^}]*scale\(/.test(css), 'hover never scales the chip')
-  assert.ok(!/\.dip-root:active\{[^}]*scale\(/.test(css), 'press never scales the chip')
-  assert.match(css, /@keyframes dip-burst/, 'press has its shockwave')
-  assert.match(css, /\.dip-root:active \.dip-burst\{animation:dip-burst/, 'the burst fires on press')
-  assert.match(css, /@keyframes dip-attract/, 'the collapsed chip breathes while a draft waits')
-
-  // the spark is a filled sprite: its box must stay clear of the label's box
-  const sparkLeft = Number(/\.dip-spark\{position:absolute;left:(\d+)px/.exec(css)?.[1])
-  const sparkWidth = Number(/left:\d+px;top:50%;width:(\d+)px/.exec(css)?.[1])
-  const pad = Number(/\.dip-btn\{[^}]*padding:0 \d+px 0 (\d+)px/.exec(css)?.[1])
-  const labelStart = pad + 15 + 6
-  assert.ok(sparkLeft + sparkWidth <= labelStart,
-    'spark box must end before the label box: ' + String(sparkLeft + sparkWidth) + ' vs ' + String(labelStart))
-
-  // motion preferences never touch legibility, only movement
+  assert.match(css, /\.dip-root\{[^}]*border:1px solid var\(--dsw-alias-border-l2\);border-radius:999px/, 'capsule outline in the host border token')
+  assert.match(css, /HOVER_BG = 'var\(--dsw-alias-interactive-bg-hover\)'/, 'hover uses the host hover token')
+  // no hover expansion and no glow/light layers
+  assert.ok(!/EXPANDED|max-width:0|dip-aurora|dip-ring|dip-burst|dip-attract|conic-gradient|drop-shadow/.test(css), 'no fancy effects')
+  assert.ok(!/\.dip-root:hover\{/.test(css), 'hovering the capsule changes nothing about its size or glow')
+  assert.ok(!/#[0-9a-f]{6}/i.test(css.slice(0, css.indexOf('status bar'))), 'button colours come from host tokens only')
   assert.match(css, /prefers-reduced-motion: reduce/)
 })
 
