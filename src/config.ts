@@ -11,6 +11,24 @@ import z from '@deepseek-ai/schemastery'
 /** Enhancement mode. */
 export type Mode = 'light' | 'standard'
 
+/** Which model refines the prompt. */
+export type ModelSource = 'conversation' | 'dedicated'
+
+/** Values the settings page edits; re-read on every request so a save applies at once. */
+export interface LiveSettings {
+  readonly mode: Mode
+  readonly modelSource: ModelSource
+  /** Dedicated route; both empty unless the user picked one. */
+  readonly provider: string
+  readonly model: string
+  /** Effort for the dedicated model; empty sends none (adapter default). */
+  readonly reasoningEffort: string
+}
+
+/** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
+export const MODE_VALUES = ['standard', 'light'] as const
+export const MODEL_SOURCE_VALUES = ['conversation', 'dedicated'] as const
+
 /** Runtime configuration after defaults are applied. */
 export interface ResolvedConfig {
   readonly defaultMode: Mode
@@ -34,7 +52,8 @@ export interface ResolvedConfig {
 
 /** Loader schema — every key optional, defaults declared here. */
 export const Config = z.object({
-  defaultMode: z.string().default('standard'),
+  defaultMode: z.union(MODE_VALUES).default('standard').volatile(),
+  modelSource: z.union(MODEL_SOURCE_VALUES).default('conversation').volatile(),
   lightMaxRatio: z.number().default(1.2),
   standardMaxRatio: z.number().default(2.5),
   acceptanceCriteria: z.boolean().default(false),
@@ -47,14 +66,40 @@ export const Config = z.object({
   smartContext: z.boolean().default(true),
   fidelityGate: z.boolean().default(true),
   lengthGate: z.boolean().default(true),
-  provider: z.string().default(''),
-  model: z.string().default(''),
+  provider: z.string().default('').volatile(),
+  model: z.string().default('').volatile(),
+  dedicatedReasoningEffort: z.string().default('').volatile(),
   // 'low' by default: a rewrite is a shallow task, and reasoning models at the
   // agent's default effort (often max) can burn minutes or exhaust a small token
   // budget on thinking before any answer text arrives.
   reasoningEffort: z.string().default('low'),
   logFailures: z.boolean().default(true),
 })
+
+/** Read one field that may be a volatile reference (`.get()`) or a plain value. */
+function live(value: unknown): unknown {
+  return value !== null && typeof value === 'object' && typeof (value as { get?: unknown }).get === 'function'
+    ? (value as { get(): unknown }).get()
+    : value
+}
+
+/**
+ * Resolve the settings-page fields at call time.
+ *
+ * @param raw - config as handed to `apply` (volatile references or plain values).
+ * @returns the current mode, model source, and dedicated route.
+ */
+export function readLiveSettings(raw: unknown): LiveSettings {
+  const c = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const source = live(c.modelSource)
+  return {
+    mode: pickMode(live(c.defaultMode), 'standard'),
+    modelSource: source === 'dedicated' ? 'dedicated' : 'conversation',
+    provider: text(live(c.provider)),
+    model: text(live(c.model)),
+    reasoningEffort: text(live(c.dedicatedReasoningEffort)),
+  }
+}
 
 function pickMode(value: unknown, fallback: Mode): Mode {
   return value === 'light' || value === 'standard' ? value : fallback
@@ -87,7 +132,7 @@ function text(value: unknown): string {
 export function resolveConfig(raw: unknown): ResolvedConfig {
   const c = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   return {
-    defaultMode: pickMode(c.defaultMode, 'standard'),
+    defaultMode: pickMode(live(c.defaultMode), 'standard'),
     lightMaxRatio: positive(c.lightMaxRatio, 1.2),
     standardMaxRatio: positive(c.standardMaxRatio, 2.5),
     acceptanceCriteria: flag(c.acceptanceCriteria, false),
@@ -100,8 +145,8 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
     smartContext: flag(c.smartContext, true),
     fidelityGate: flag(c.fidelityGate, true),
     lengthGate: flag(c.lengthGate, true),
-    provider: text(c.provider),
-    model: text(c.model),
+    provider: text(live(c.provider)),
+    model: text(live(c.model)),
     reasoningEffort: text(c.reasoningEffort) !== '' ? text(c.reasoningEffort) : 'low',
     logFailures: flag(c.logFailures, true),
   }

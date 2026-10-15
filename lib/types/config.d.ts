@@ -6,6 +6,21 @@
 import z from '@deepseek-ai/schemastery';
 /** Enhancement mode. */
 export type Mode = 'light' | 'standard';
+/** Which model refines the prompt. */
+export type ModelSource = 'conversation' | 'dedicated';
+/** Values the settings page edits; re-read on every request so a save applies at once. */
+export interface LiveSettings {
+    readonly mode: Mode;
+    readonly modelSource: ModelSource;
+    /** Dedicated route; both empty unless the user picked one. */
+    readonly provider: string;
+    readonly model: string;
+    /** Effort for the dedicated model; empty sends none (adapter default). */
+    readonly reasoningEffort: string;
+}
+/** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
+export declare const MODE_VALUES: readonly ["standard", "light"];
+export declare const MODEL_SOURCE_VALUES: readonly ["conversation", "dedicated"];
 /** Runtime configuration after defaults are applied. */
 export interface ResolvedConfig {
     readonly defaultMode: Mode;
@@ -27,43 +42,54 @@ export interface ResolvedConfig {
     readonly logFailures: boolean;
 }
 /** Loader schema — every key optional, defaults declared here. */
-export declare const Config: z<Schemastery.ObjectS<{
-    defaultMode: z<string, string>;
-    lightMaxRatio: z<number, number>;
-    standardMaxRatio: z<number, number>;
-    acceptanceCriteria: z<boolean, boolean>;
-    temperature: z<number, number>;
-    maxTokens: z<number, number>;
-    timeoutMs: z<number, number>;
-    maxInputChars: z<number, number>;
-    contextTurns: z<number, number>;
-    contextChars: z<number, number>;
-    smartContext: z<boolean, boolean>;
-    fidelityGate: z<boolean, boolean>;
-    lengthGate: z<boolean, boolean>;
-    provider: z<string, string>;
-    model: z<string, string>;
-    reasoningEffort: z<string, string>;
-    logFailures: z<boolean, boolean>;
-}>, Schemastery.ObjectT<{
-    defaultMode: z<string, string>;
-    lightMaxRatio: z<number, number>;
-    standardMaxRatio: z<number, number>;
-    acceptanceCriteria: z<boolean, boolean>;
-    temperature: z<number, number>;
-    maxTokens: z<number, number>;
-    timeoutMs: z<number, number>;
-    maxInputChars: z<number, number>;
-    contextTurns: z<number, number>;
-    contextChars: z<number, number>;
-    smartContext: z<boolean, boolean>;
-    fidelityGate: z<boolean, boolean>;
-    lengthGate: z<boolean, boolean>;
-    provider: z<string, string>;
-    model: z<string, string>;
-    reasoningEffort: z<string, string>;
-    logFailures: z<boolean, boolean>;
-}>>;
+export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+    defaultMode: z<"light" | "standard", "light" | "standard", "volatile-defined">;
+    modelSource: z<"conversation" | "dedicated", "conversation" | "dedicated", "volatile-defined">;
+    lightMaxRatio: z<number, number, "defined">;
+    standardMaxRatio: z<number, number, "defined">;
+    acceptanceCriteria: z<boolean, boolean, "defined">;
+    temperature: z<number, number, "defined">;
+    maxTokens: z<number, number, "defined">;
+    timeoutMs: z<number, number, "defined">;
+    maxInputChars: z<number, number, "defined">;
+    contextTurns: z<number, number, "defined">;
+    contextChars: z<number, number, "defined">;
+    smartContext: z<boolean, boolean, "defined">;
+    fidelityGate: z<boolean, boolean, "defined">;
+    lengthGate: z<boolean, boolean, "defined">;
+    provider: z<string, string, "volatile-defined">;
+    model: z<string, string, "volatile-defined">;
+    dedicatedReasoningEffort: z<string, string, "volatile-defined">;
+    reasoningEffort: z<string, string, "defined">;
+    logFailures: z<boolean, boolean, "defined">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    defaultMode: z<"light" | "standard", "light" | "standard", "volatile-defined">;
+    modelSource: z<"conversation" | "dedicated", "conversation" | "dedicated", "volatile-defined">;
+    lightMaxRatio: z<number, number, "defined">;
+    standardMaxRatio: z<number, number, "defined">;
+    acceptanceCriteria: z<boolean, boolean, "defined">;
+    temperature: z<number, number, "defined">;
+    maxTokens: z<number, number, "defined">;
+    timeoutMs: z<number, number, "defined">;
+    maxInputChars: z<number, number, "defined">;
+    contextTurns: z<number, number, "defined">;
+    contextChars: z<number, number, "defined">;
+    smartContext: z<boolean, boolean, "defined">;
+    fidelityGate: z<boolean, boolean, "defined">;
+    lengthGate: z<boolean, boolean, "defined">;
+    provider: z<string, string, "volatile-defined">;
+    model: z<string, string, "volatile-defined">;
+    dedicatedReasoningEffort: z<string, string, "volatile-defined">;
+    reasoningEffort: z<string, string, "defined">;
+    logFailures: z<boolean, boolean, "defined">;
+}>>, "plain">;
+/**
+ * Resolve the settings-page fields at call time.
+ *
+ * @param raw - config as handed to `apply` (volatile references or plain values).
+ * @returns the current mode, model source, and dedicated route.
+ */
+export declare function readLiveSettings(raw: unknown): LiveSettings;
 /**
  * Apply defaults and reject nonsense without ever throwing at the user.
  *

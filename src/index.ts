@@ -18,7 +18,7 @@
  */
 
 import z from '@deepseek-ai/schemastery'
-import { resolveConfig, type Mode, type ResolvedConfig } from './config.js'
+import { readLiveSettings, resolveConfig, type Mode, type ResolvedConfig } from './config.js'
 import { improveDraft, ERR, type ImproveDeps, type SessionsFace } from './orchestrate.js'
 import type { LlmFace, Route } from './llm-call.js'
 
@@ -108,9 +108,32 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
     return next()
   }) as never)
 
+  // The model picked in one conversation: the host's durable `modelSelection` session
+  // projection (`next` = pending pick, else the last request's route). Read structurally
+  // and defensively — on hosts without it the route falls back to the default model.
+  const conversationModel = (sessionId: string): { provider?: unknown; model?: unknown } | undefined => {
+    const sessions = service('sessions') as { get?: (id: string) => unknown } | undefined
+    const projections = service('sessionProjections') as { stateOf?: (session: unknown, key: string) => unknown } | undefined
+    if (typeof sessions?.get !== 'function' || typeof projections?.stateOf !== 'function') return undefined
+    try {
+      const session = sessions.get(sessionId)
+      if (session === undefined) return undefined
+      const state = projections.stateOf(session, 'modelSelection') as
+        { pending?: { provider?: unknown; model?: unknown } | null; lastUsed?: { provider?: unknown; model?: unknown } | null } | undefined
+      return state?.pending ?? state?.lastUsed ?? undefined
+    } catch {
+      return undefined
+    }
+  }
+
   const deps = (): ImproveDeps => {
     const defaults = service('agentDefaultModel') as { currentSelection?: () => unknown } | undefined
+    const settings = readLiveSettings(rawConfig)
     return {
+      dedicated: settings.modelSource === 'dedicated'
+        ? { provider: settings.provider, model: settings.model, reasoningEffort: settings.reasoningEffort }
+        : undefined,
+      conversationModel,
       llm: service('llm') as LlmFace | undefined,
       selection: typeof defaults?.currentSelection === 'function'
         ? (defaults.currentSelection() as { provider?: unknown; model?: unknown } | undefined)
@@ -130,7 +153,7 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
       if (req.method === 'GET' && (url === API + '/config' || url === API + '/config/')) {
         sendJson(res, 200, {
           ok: true,
-          defaultMode: config.defaultMode,
+          defaultMode: readLiveSettings(rawConfig).mode,
           modes: ['light', 'standard'],
           maxRatio: { light: config.lightMaxRatio, standard: config.standardMaxRatio },
           smartContext: config.smartContext,
@@ -156,7 +179,8 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
       const input = (body !== null && typeof body === 'object' ? body : {}) as Record<string, unknown>
       const draft = typeof input.text === 'string' ? input.text : ''
       const sessionId = typeof input.sessionId === 'string' && input.sessionId !== '' ? input.sessionId : ''
-      const mode: Mode = input.mode === 'light' || input.mode === 'standard' ? input.mode : config.defaultMode
+      // The settings page owns the mode; a request may still name one explicitly.
+      const mode: Mode = input.mode === 'light' || input.mode === 'standard' ? input.mode : readLiveSettings(rawConfig).mode
 
       // Cancellation: a browser aborting the fetch must stop the model.
       const controller = new AbortController()

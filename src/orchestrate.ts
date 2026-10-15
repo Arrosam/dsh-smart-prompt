@@ -63,6 +63,10 @@ export interface ImproveDeps {
   readonly llm: LlmFace | undefined
   /** `agentDefaultModel.currentSelection()` output, when the service exists. */
   readonly selection?: { provider?: unknown; model?: unknown } | undefined
+  /** The settings-page dedicated model, present only when that source is selected. */
+  readonly dedicated?: { provider?: unknown; model?: unknown; reasoningEffort?: unknown } | undefined
+  /** Model picked in the request's conversation, when the host can say. */
+  readonly conversationModel?: (sessionId: string) => { provider?: unknown; model?: unknown } | undefined
   /** Route captured from the live `llm/stream` waterfall, when one has been seen. */
   readonly lastRoute?: Route | null
   readonly sessions?: SessionsFace | undefined
@@ -123,13 +127,18 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
 
   let route: Route
   try {
-    route = resolveRoute(cfg, deps.selection, deps.lastRoute ?? null)
+    route = resolveRoute({
+      dedicated: deps.dedicated,
+      conversation: input.sessionId !== '' && deps.conversationModel !== undefined ? deps.conversationModel(input.sessionId) : undefined,
+      defaults: deps.selection,
+      lastSeen: deps.lastRoute ?? null,
+    })
   } catch (error) {
     if (error instanceof NoRouteError) {
       return {
         ok: false,
         code: ERR.NO_ROUTE,
-        message: '未找到可用模型：请先在设置里选默认模型，或在插件配置里成对填写 provider/model',
+        message: '未找到可用模型：请在插件设置里选一个模型，或先在会话里选模型',
       }
     }
     throw error

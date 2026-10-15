@@ -181,7 +181,7 @@ test('the button still renders on a host that only provides a point-in-time inpu
   assert.equal(renderer.root.findAllByProps({ className: 'dip-btn' })[0].props.disabled, false)
 })
 
-test('clicking posts the draft with its mode and writes the enhanced text back', async () => {
+test('clicking posts the draft and writes the enhanced text back', async () => {
   const { button } = await boot()
   let written = null
   const calls = []
@@ -194,7 +194,7 @@ test('clicking posts the draft with its mode and writes the enhanced text back',
     assert.equal(calls.length, 1)
     assert.equal(calls[0].url, '/dsh-improve-prompt/api/improve')
     assert.equal(calls[0].body.sessionId, 's1')
-    assert.equal(calls[0].body.mode, 'standard')
+    assert.equal(calls[0].body.mode, undefined, 'the host reads the mode from the plugin settings')
     assert.equal(calls[0].body.text, '把那个接口加上限流')
     assert.equal(written, '为登录接口增加按 IP 的限流，每分钟 60 次。')
   } finally {
@@ -427,4 +427,105 @@ test('the injected stylesheet is scoped by a plugin data attribute', async () =>
   const source = await import('node:fs').then((fs) => fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'))
   assert.match(source, /data-plugin/)
   assert.match(source, /dsh-improve-prompt/)
+})
+/**
+ * Fake host primitives with the same contract as dsh-client-ui-primitives: a staged
+ * form model over a scope, and pass-through form/segmented components.
+ */
+function fakePrimitives() {
+  class SettingsFormModel {
+    constructor(scope, specs) { this.scope = scope; this.fields = specs.map((s) => s.field); this.staged = new Map(); this.listeners = new Set() }
+    bind(project) {
+      let snap = project()
+      const fire = () => { snap = project(); for (const l of this.listeners) l() }
+      this.fire = fire
+      return { getSnapshot: () => snap, subscribe: (l) => { this.listeners.add(l); return () => this.listeners.delete(l) } }
+    }
+    shell() { return { available: true, writable: true, dirty: this.staged.size > 0, invalid: false, saving: false, failed: false } }
+    field(name) {
+      const text = this.staged.has(name) ? this.staged.get(name) : String(this.scope.getSnapshot().value?.[name] ?? '')
+      return { text, overridden: false, invalid: false }
+    }
+    actions() {
+      return {
+        edit: (f, text) => { this.staged.set(f, text); this.fire() },
+        resetField: () => {},
+        save: () => { this.saved = Object.fromEntries(this.staged) },
+        discard: () => { this.staged.clear(); this.fire() },
+      }
+    }
+    dispose() {}
+  }
+  const SettingsForm = (props) => React.createElement('form', { 'data-invalid': String(props.state.invalid) }, props.children)
+  const SegmentedControl = (props) => React.createElement('div', { 'data-segmented': props.id, 'data-value': props.value })
+  return { SettingsFormModel, settingsTextField: (field) => ({ field }), SettingsForm, SegmentedControl }
+}
+
+async function bootWithSettings(value) {
+  const { module } = await loadClientModuleWith(fakePrimitives())
+  const { ctx, registered } = fakeCtx()
+  const scope = { getSnapshot: () => ({ status: 'ready', value, writable: true }), subscribe: () => () => {} }
+  ctx.get = (name) => {
+    if (name === 'configForms') return { get: (id) => { assert.equal(id, 'dsh-improve-prompt'); return scope }, whileServed: (_ns, register) => register() }
+    if (name === 'remote') return { session: { modelCatalog: async () => ({ ok: true, value: { groups: [{ id: 'p', name: 'Provider', models: [{ id: 'm1', name: 'Model One', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }] } }) } }
+    return undefined
+  }
+  await TestRenderer.act(async () => { module.apply(ctx) })
+  return registered.find((r) => r.options.name === 'plugins.bundle.config')
+}
+
+/** loadClientModule, but the loader's require also resolves the host primitives. */
+async function loadClientModuleWith(primitives) {
+  let captured = null
+  globalThis.window = { __ModuleLoader__: { load: (m) => { captured = m } }, setTimeout, clearTimeout }
+  await import('../lib/client.js?cachebust=' + String(Date.now()) + Math.random())
+  const module = captured.factory((id) => {
+    if (id === 'react') return React
+    if (id === 'react/jsx-runtime') return require('react/jsx-runtime')
+    if (id === '@deepseek-ai/dsh-client-ui-primitives') return primitives
+    throw new Error('unexpected external: ' + id)
+  })
+  return { module }
+}
+
+async function mountSection(entry) {
+  const face = entry.options.inject()
+  const store = face.hooks.improvePromptSettings
+  const props = { ...face, view: 'page', t: (k) => k, useImprovePromptSettings: (sel) => sel(store.getSnapshot()) }
+  delete props.hooks
+  const renderer = await mount(entry.component, props)
+  const rerender = async () => { await TestRenderer.act(async () => { renderer.update(React.createElement(entry.component, props)) }) }
+  return { face, store, renderer, rerender }
+}
+
+test('the settings section registers on the plugin page only when the host serves it', async () => {
+  const { registered } = await boot()
+  assert.equal(registered.some((r) => r.options.name === 'plugins.bundle.config'), false, 'no settings section without configForms')
+  const entry = await bootWithSettings({ defaultMode: 'standard', modelSource: 'conversation' })
+  assert.ok(entry !== undefined)
+  assert.equal(entry.options.key, 'dsh-improve-prompt', 'keyed by package name')
+})
+
+test('the section shows the mode and model-source choices from the saved settings', async () => {
+  const entry = await bootWithSettings({ defaultMode: 'light', modelSource: 'conversation' })
+  const { renderer } = await mountSection(entry)
+  const segmented = renderer.root.findAll((n) => n.props['data-segmented'] !== undefined)
+  assert.deepEqual(segmented.map((n) => n.props['data-value']), ['light', 'conversation'])
+  assert.equal(renderer.root.findAll((n) => n.type === 'select').length, 0, 'no model picker for the conversation source')
+})
+
+test('choosing a dedicated model stages provider, model and its default effort', async () => {
+  const entry = await bootWithSettings({ defaultMode: 'standard', modelSource: 'conversation' })
+  const { face, store, renderer, rerender } = await mountSection(entry)
+  await TestRenderer.act(async () => { face.setSource('dedicated'); await new Promise((r) => setTimeout(r, 0)) })
+  await rerender()
+  assert.equal(store.getSnapshot().invalid, true, 'dedicated without a model blocks the save')
+  const [modelSelect] = renderer.root.findAll((n) => n.type === 'select')
+  await TestRenderer.act(async () => { modelSelect.props.onChange({ target: { value: 'p\u0000m1' } }) })
+  await rerender()
+  const state = store.getSnapshot()
+  assert.deepEqual([state.source, state.provider, state.model, state.effort], ['dedicated', 'p', 'm1', 'low'])
+  assert.equal(state.invalid, false)
+  const selects = renderer.root.findAll((n) => n.type === 'select')
+  assert.equal(selects.length, 2, 'the chosen model offers its reasoning efforts')
 })

@@ -45,10 +45,14 @@ export type StreamChunk = {
 export interface LlmFace {
     stream(options: GenerateOptions): AsyncIterable<StreamChunk>;
 }
-/** One resolved provider/model route. */
+/**
+ * One resolved provider/model route. `reasoningEffort`, when present, overrides the
+ * plugin-wide effort (the dedicated model carries its own; empty means adapter default).
+ */
 export interface Route {
     readonly provider: string;
     readonly model: string;
+    readonly reasoningEffort?: string;
 }
 /** Why a call produced no usable text. */
 export type CallFailure = {
@@ -83,21 +87,34 @@ export interface CallRequest {
 export declare class NoRouteError extends Error {
     constructor();
 }
+/** A provider/model pair from any host source; anything else counts as absent. */
+type RouteLike = {
+    provider?: unknown;
+    model?: unknown;
+} | null | undefined;
+/** Where a route may come from, in the order {@link resolveRoute} tries them. */
+export interface RouteSources {
+    /** Dedicated model from the settings page; used only when the source is `dedicated`. */
+    readonly dedicated?: (RouteLike & {
+        reasoningEffort?: unknown;
+    }) | undefined;
+    /** Model picked in this conversation (next request, else last used). */
+    readonly conversation?: RouteLike;
+    /** The harness default-model selection. */
+    readonly defaults?: RouteLike;
+    /** Route captured from the most recent real model call. */
+    readonly lastSeen?: Route | null;
+}
 /**
- * Resolve the route for one call, in precedence order: explicit config pair, then
- * the harness default-model selection, then the last route seen on the live
- * `llm/stream` waterfall.
+ * Resolve the route for one call, in precedence order: the dedicated model (when the
+ * user chose one), the conversation's own model, the harness default selection, then
+ * the last route seen on the live `llm/stream` waterfall.
  *
- * @param config - resolved configuration.
- * @param defaults - the `agentDefaultModel` selection, or undefined.
- * @param lastSeen - route captured from the most recent real model call, or null.
+ * @param sources - the candidate routes.
  * @returns the route to use.
  * @throws {NoRouteError} when nothing is available.
  */
-export declare function resolveRoute(config: ResolvedConfig, defaults: {
-    provider?: unknown;
-    model?: unknown;
-} | undefined, lastSeen: Route | null): Route;
+export declare function resolveRoute(sources: RouteSources): Route;
 /**
  * Run one model call and assemble its text.
  *
@@ -110,3 +127,4 @@ export declare function resolveRoute(config: ResolvedConfig, defaults: {
  * @returns the assembled text or a typed failure.
  */
 export declare function callModel(llm: LlmFace, request: CallRequest): Promise<CallResult>;
+export {};

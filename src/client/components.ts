@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { splitCommand } from '../command.js'
-import { clear, getMode, notify, storeFor, subscribe, type InputActionsFace, type Meta } from './store.js'
+import { clear, notify, storeFor, subscribe, type InputActionsFace, type Meta } from './store.js'
 
 /** Localized copy lookup bound to the plugin namespace. */
 export type TFn = (key: string) => string
@@ -113,7 +113,8 @@ function runImprove(sessionId: string, text: string, actions: InputActionsFace, 
       const response = await fetch(API, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, text, mode: getMode() }),
+        // No mode: the host reads it from the plugin settings page.
+        body: JSON.stringify({ sessionId, text }),
         signal: controller.signal,
       })
       const data = (await response.json()) as {

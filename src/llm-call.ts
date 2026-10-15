@@ -45,8 +45,11 @@ export interface LlmFace {
   stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 }
 
-/** One resolved provider/model route. */
-export interface Route { readonly provider: string; readonly model: string }
+/**
+ * One resolved provider/model route. `reasoningEffort`, when present, overrides the
+ * plugin-wide effort (the dedicated model carries its own; empty means adapter default).
+ */
+export interface Route { readonly provider: string; readonly model: string; readonly reasoningEffort?: string }
 
 /** Why a call produced no usable text. */
 export type CallFailure =
@@ -73,7 +76,7 @@ export interface CallRequest {
 /** Reason a route could not be resolved. */
 export class NoRouteError extends Error {
   constructor() {
-    super('dsh-improve-prompt: no provider/model route available (set config.provider+config.model, or send one message in this session first)')
+    super('dsh-improve-prompt: no provider/model route available (pick a model in the plugin settings or in this conversation)')
     this.name = 'NoRouteError'
   }
 }
@@ -97,27 +100,44 @@ function userMessage(text: string): unknown {
   })
 }
 
+/** A provider/model pair from any host source; anything else counts as absent. */
+type RouteLike = { provider?: unknown; model?: unknown } | null | undefined
+
+function routeOf(candidate: RouteLike): Route | null {
+  const provider = candidate !== null && candidate !== undefined && typeof candidate.provider === 'string' ? candidate.provider.trim() : ''
+  const model = candidate !== null && candidate !== undefined && typeof candidate.model === 'string' ? candidate.model.trim() : ''
+  return provider !== '' && model !== '' ? { provider, model } : null
+}
+
+/** Where a route may come from, in the order {@link resolveRoute} tries them. */
+export interface RouteSources {
+  /** Dedicated model from the settings page; used only when the source is `dedicated`. */
+  readonly dedicated?: (RouteLike & { reasoningEffort?: unknown }) | undefined
+  /** Model picked in this conversation (next request, else last used). */
+  readonly conversation?: RouteLike
+  /** The harness default-model selection. */
+  readonly defaults?: RouteLike
+  /** Route captured from the most recent real model call. */
+  readonly lastSeen?: Route | null
+}
+
 /**
- * Resolve the route for one call, in precedence order: explicit config pair, then
- * the harness default-model selection, then the last route seen on the live
- * `llm/stream` waterfall.
+ * Resolve the route for one call, in precedence order: the dedicated model (when the
+ * user chose one), the conversation's own model, the harness default selection, then
+ * the last route seen on the live `llm/stream` waterfall.
  *
- * @param config - resolved configuration.
- * @param defaults - the `agentDefaultModel` selection, or undefined.
- * @param lastSeen - route captured from the most recent real model call, or null.
+ * @param sources - the candidate routes.
  * @returns the route to use.
  * @throws {NoRouteError} when nothing is available.
  */
-export function resolveRoute(
-  config: ResolvedConfig,
-  defaults: { provider?: unknown; model?: unknown } | undefined,
-  lastSeen: Route | null,
-): Route {
-  if (config.provider !== '' && config.model !== '') return { provider: config.provider, model: config.model }
-  const provider = defaults !== undefined && typeof defaults.provider === 'string' ? defaults.provider.trim() : ''
-  const model = defaults !== undefined && typeof defaults.model === 'string' ? defaults.model.trim() : ''
-  if (provider !== '' && model !== '') return { provider, model }
-  if (lastSeen !== null) return lastSeen
+export function resolveRoute(sources: RouteSources): Route {
+  const dedicated = routeOf(sources.dedicated)
+  if (dedicated !== null) {
+    const effort = typeof sources.dedicated?.reasoningEffort === 'string' ? sources.dedicated.reasoningEffort.trim() : ''
+    return { ...dedicated, reasoningEffort: effort }
+  }
+  const picked = routeOf(sources.conversation) ?? routeOf(sources.defaults) ?? sources.lastSeen ?? null
+  if (picked !== null) return picked
   throw new NoRouteError()
 }
 
@@ -155,7 +175,8 @@ export async function callModel(llm: LlmFace, request: CallRequest): Promise<Cal
     }
     // Only send a reasoning effort when the user asked for one: gateways disagree
     // on whether they accept the parameter at all.
-    if (request.config.reasoningEffort !== '') options.reasoningEffort = request.config.reasoningEffort
+    const effort = request.route.reasoningEffort !== undefined ? request.route.reasoningEffort : request.config.reasoningEffort
+    if (effort !== '') options.reasoningEffort = effort
 
     const iterator = llm.stream(options)[Symbol.asyncIterator]()
     let finished = false

@@ -63,6 +63,20 @@ export const css = [
   '.dip-bar-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
   '.dip-sep{opacity:.4}',
 
+  /* ---------- settings section (Plugins page), host tokens only ---------- */
+  '.dip-set-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:12px 0}',
+  '.dip-set-row+.dip-set-row{border-top:.5px solid var(--dsw-alias-border-l2)}',
+  '.dip-set-text{flex:1;min-width:0}',
+  '.dip-set-label{font-size:13px;line-height:1.5;color:var(--dsw-alias-label-primary)}',
+  '.dip-set-hint{margin:2px 0 0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}',
+  '.dip-set-control{flex:none}',
+  '.dip-set-dedicated{display:grid;gap:10px;padding:0 0 12px}',
+  '.dip-set-field{display:grid;gap:4px}',
+  '.dip-set-select{height:32px;padding:0 8px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);',
+  'background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-md)}',
+  '.dip-set-error{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}',
+  '.dip-set-link{padding:0;border:0;background:0 0;font:inherit;color:var(--dsw-alias-state-business-primary);cursor:pointer}',
+
   /* ---------- keyframes ---------- */
   '@keyframes dip-icon-spin{to{transform:rotate(360deg)}}',
   '@keyframes dip-bar-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}',

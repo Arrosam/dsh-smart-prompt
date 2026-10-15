@@ -18,9 +18,26 @@ import React from 'react'
 import { ImproveButton, StatusBar, type TFn } from './components.js'
 import { NS, en, zh } from './locales.js'
 import { STYLE_ATTR, css } from './styles.js'
+import { ENTRY_ID, PACKAGE_NAME, SettingsSection, settingsSection, type CatalogGroup, type Primitives } from './settings.js'
 
 /** Required client services. */
 export const inject = ['slots', 'locale']
+
+/**
+ * Host primitives module the settings section renders with. Loaded through the module
+ * loader's `require` at apply time (see tsdown externals), never bundled.
+ */
+const PRIMITIVES_MODULE = '@deepseek-ai/dsh-client-ui-primitives'
+
+/** Services the settings section needs; read with ctx.get so hosts without them still run the button. */
+interface ConfigFormsFace {
+  get(entryId: string): unknown
+  whileServed(namespaces: readonly string[], register: () => () => void): () => void
+}
+interface RemoteFace {
+  session?: { modelCatalog?: () => Promise<{ ok: boolean; value?: { groups?: readonly CatalogGroup[] } }> }
+  $on?: (event: string, listener: () => void) => () => void
+}
 
 interface LocaleFace {
   register(namespace: string, dicts: { zh: Record<string, string>; en: Record<string, string> }): () => void
@@ -35,6 +52,8 @@ interface SlotsFace {
     priority?: number
     order?: number
     locale?: string
+    /** Keyed slots (`plugins.bundle.config`) address the entry by key. */
+    key?: string
     inject?: (sessionId: string) => unknown
   }, component: unknown): unknown
 }
@@ -43,6 +62,22 @@ interface ClientContext {
   slots: SlotsFace
   locale?: LocaleFace
   effect(fn: () => unknown | (() => void), label?: string): void
+  get?(name: string): unknown
+}
+
+/** The module loader's require, when the bundle runs under it. */
+declare const require: ((id: string) => unknown) | undefined
+
+function loadPrimitives(): Primitives | undefined {
+  try {
+    const mod = typeof require === 'function' ? require(PRIMITIVES_MODULE) as Partial<Primitives> | undefined : undefined
+    return mod !== undefined && typeof mod.SettingsFormModel === 'function' && typeof mod.SettingsForm === 'function'
+      && typeof mod.SegmentedControl === 'function' && typeof mod.settingsTextField === 'function'
+      ? mod as Primitives
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 type SlotProps = Record<string, unknown> & { sessionId?: string }
@@ -120,4 +155,33 @@ export function apply(ctx: ClientContext): void {
       return () => {}
     }
   }, 'dsh-improve-prompt: status bar')
+
+  // Plugins page (DSH 0.2+): the mode and model settings. Skipped quietly on hosts
+  // without the settings services, so the composer button never depends on them.
+  const configForms = ctx.get?.('configForms') as ConfigFormsFace | undefined
+  const remote = ctx.get?.('remote') as RemoteFace | undefined
+  const primitives = loadPrimitives()
+  if (configForms === undefined || primitives === undefined) return
+  const loadCatalog = async (): Promise<readonly CatalogGroup[] | undefined> => {
+    const response = await remote?.session?.modelCatalog?.()
+    return response?.ok === true ? response.value?.groups ?? [] : undefined
+  }
+  const Section = SettingsSection(primitives)
+  ctx.effect(() => {
+    try {
+      const section = settingsSection(primitives, configForms.get(ENTRY_ID), loadCatalog)
+      const stopServing = configForms.whileServed([ENTRY_ID], () => ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
+        name: 'plugins.bundle.config',
+        key: PACKAGE_NAME,
+        locale: NS,
+        inject: () => ({ hooks: { improvePromptSettings: section.store }, ...section.actions }),
+      }, (props: Record<string, unknown>) => React.createElement(Section, Object.assign({}, props, { t }) as never))) as () => void)
+      // Model list changes (new adapters, edited settings) re-read the catalog.
+      const offAdapters = remote?.$on?.('llm/adapters-updated', section.actions.refreshCatalog)
+      return () => { stopServing(); offAdapters?.(); section.dispose() }
+    } catch (error) {
+      console.error('[dsh-improve-prompt] settings section registration failed', error)
+      return () => {}
+    }
+  }, 'dsh-improve-prompt: settings section')
 }

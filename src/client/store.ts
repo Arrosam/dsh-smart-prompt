@@ -44,24 +44,6 @@ export interface SessionState {
 const states = new Map<string, SessionState>()
 const listeners = new Map<string, Set<() => void>>()
 
-const MODE_KEY = 'dsh-improve-prompt:mode'
-let cachedMode: Mode | null = null
-
-/** Current mode, persisted across reloads. */
-export function getMode(): Mode {
-  if (cachedMode !== null) return cachedMode
-  let stored: string | null = null
-  try { stored = window.localStorage.getItem(MODE_KEY) } catch { stored = null }
-  cachedMode = stored === 'light' ? 'light' : 'standard'
-  return cachedMode
-}
-
-/** Persist a new mode. */
-export function setMode(mode: Mode): void {
-  cachedMode = mode
-  try { window.localStorage.setItem(MODE_KEY, mode) } catch { /* private mode: keep it in memory */ }
-}
-
 function fresh(): SessionState {
   return { phase: 'idle', backup: '', enhanced: '', meta: null, error: null, controller: null, actions: null }
 }

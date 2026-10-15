@@ -66,6 +66,17 @@ export interface ImproveDeps {
         provider?: unknown;
         model?: unknown;
     } | undefined;
+    /** The settings-page dedicated model, present only when that source is selected. */
+    readonly dedicated?: {
+        provider?: unknown;
+        model?: unknown;
+        reasoningEffort?: unknown;
+    } | undefined;
+    /** Model picked in the request's conversation, when the host can say. */
+    readonly conversationModel?: (sessionId: string) => {
+        provider?: unknown;
+        model?: unknown;
+    } | undefined;
     /** Route captured from the live `llm/stream` waterfall, when one has been seen. */
     readonly lastRoute?: Route | null;
     readonly sessions?: SessionsFace | undefined;
