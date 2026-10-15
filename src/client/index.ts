@@ -1,5 +1,5 @@
 /**
- * dsh-improve-prompt — client half.
+ * dsh-smart-prompt — client half.
  *
  * Two slot entries and nothing else:
  * - `conversation.input.right` — the sparkle button in the composer tool row.
@@ -11,7 +11,7 @@
  * a session-scoped entry receives `useInput` + `inputActions` (the standard session
  * props) plus whatever `inject` adds — here the `sessionId`.
  *
- * @module dsh-improve-prompt/client
+ * @module dsh-smart-prompt/client
  */
 
 import React from 'react'
@@ -99,21 +99,21 @@ export function apply(ctx: ClientContext): void {
     style.textContent = css
     document.head.appendChild(style)
     return () => { style.remove() }
-  }, 'dsh-improve-prompt: styles')
+  }, 'dsh-smart-prompt: styles')
 
   if (ctx.locale !== undefined) {
-    ctx.effect(() => ctx.locale!.register(NS, { zh, en }), 'dsh-improve-prompt: locale')
+    ctx.effect(() => ctx.locale!.register(NS, { zh, en }), 'dsh-smart-prompt: locale')
     try {
       t = ctx.locale.bind(NS)
     } catch (error) {
-      console.error('[dsh-improve-prompt] locale bind failed; using the built-in English copy', error)
+      console.error('[dsh-smart-prompt] locale bind failed; using the built-in English copy', error)
     }
   } else {
-    console.error('[dsh-improve-prompt] no locale service; using the built-in English copy')
+    console.error('[dsh-smart-prompt] no locale service; using the built-in English copy')
   }
 
   if (ctx.slots === undefined) {
-    console.error('[dsh-improve-prompt] no slots service; composer entries not registered')
+    console.error('[dsh-smart-prompt] no slots service; composer entries not registered')
     return
   }
 
@@ -123,17 +123,17 @@ export function apply(ctx: ClientContext): void {
       return ctx.slots.inject('conversation.input.right', function* () {
         yield ctx.slots.register({
           name: 'conversation.input.right',
-          id: 'dsh-improve-prompt-button',
+          id: 'dsh-smart-prompt-button',
           order: 40,
           locale: NS,
           inject: (sessionId: string) => ({ sessionId }),
         }, (slotProps: SlotProps) => React.createElement(ImproveButton, Object.assign({}, slotProps, { t }) as never))
       })
     } catch (error) {
-      console.error('[dsh-improve-prompt] button slot registration failed', error)
+      console.error('[dsh-smart-prompt] button slot registration failed', error)
       return () => {}
     }
-  }, 'dsh-improve-prompt: composer button')
+  }, 'dsh-smart-prompt: composer button')
 
   // Floating over the transcript, just above the composer card: the certificate bubble.
   ctx.effect(() => {
@@ -141,7 +141,7 @@ export function apply(ctx: ClientContext): void {
       return ctx.slots.inject('conversation.input.overlay', function* () {
         yield ctx.slots.register({
           name: 'conversation.input.overlay',
-          id: 'dsh-improve-prompt-bar',
+          id: 'dsh-smart-prompt-bar',
           order: 40,
           locale: NS,
           inject: (sessionId: string) => ({ sessionId }),
@@ -151,10 +151,10 @@ export function apply(ctx: ClientContext): void {
         } as never))
       })
     } catch (error) {
-      console.error('[dsh-improve-prompt] status bar slot registration failed', error)
+      console.error('[dsh-smart-prompt] status bar slot registration failed', error)
       return () => {}
     }
-  }, 'dsh-improve-prompt: status bar')
+  }, 'dsh-smart-prompt: status bar')
 
   // Plugins page (DSH 0.2+): the mode and model settings. Skipped quietly on hosts
   // without the settings services, so the composer button never depends on them.
@@ -174,14 +174,14 @@ export function apply(ctx: ClientContext): void {
         name: 'plugins.bundle.config',
         key: PACKAGE_NAME,
         locale: NS,
-        inject: () => ({ hooks: { improvePromptSettings: section.store }, ...section.actions }),
+        inject: () => ({ hooks: { smartPromptSettings: section.store }, ...section.actions }),
       }, (props: Record<string, unknown>) => React.createElement(Section, Object.assign({}, props, { t }) as never))) as () => void)
       // Model list changes (new adapters, edited settings) re-read the catalog.
       const offAdapters = remote?.$on?.('llm/adapters-updated', section.actions.refreshCatalog)
       return () => { stopServing(); offAdapters?.(); section.dispose() }
     } catch (error) {
-      console.error('[dsh-improve-prompt] settings section registration failed', error)
+      console.error('[dsh-smart-prompt] settings section registration failed', error)
       return () => {}
     }
-  }, 'dsh-improve-prompt: settings section')
+  }, 'dsh-smart-prompt: settings section')
 }

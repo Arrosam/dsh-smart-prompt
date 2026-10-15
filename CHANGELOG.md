@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 (dsh-smart-prompt)
+
+Forked and renamed from dsh-improve-prompt.
+
+- **Renamed to `dsh-smart-prompt`**: package name, profile entry id, client module id, local API route (`/dsh-smart-prompt/api/...`) and prompt-override folder (`$DSH_HOME/dsh-smart-prompt/prompts/`).
+- **Plugin icon** (`assets/icon.svg`): shown on the DSH Plugins page.
+- **Settings section** on the DSH 0.2 Plugins page: improvement method (Standard / Light) and the model used (the conversation's model, or a dedicated model with its own reasoning effort).
+- **Simple composer button**: a plain capsule with only the sparkle; click improves, no mode switch or hover expansion.
+
 ## 0.7.3
 
 修复在新版 DSH（0.2.x，实测 0.2.1-alpha.2）上宿主半边无法加载（`dsh-improve-prompt: failed to import`）：

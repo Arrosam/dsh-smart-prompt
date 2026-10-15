@@ -5,7 +5,7 @@
  * tests — the gates are the product, so they are verified deterministically rather
  * than by hoping a real model misbehaves.
  *
- * @module dsh-improve-prompt/orchestrate
+ * @module dsh-smart-prompt/orchestrate
  */
 
 import { extractAnchors } from './anchors.js'

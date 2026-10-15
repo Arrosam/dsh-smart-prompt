@@ -10,7 +10,7 @@
  * scope every gate to the body and to re-attach the prefix, the browser half uses it
  * only to decide whether there is anything to enhance.
  *
- * @module dsh-improve-prompt/command
+ * @module dsh-smart-prompt/command
  */
 
 /** The result of splitting one composer draft. */

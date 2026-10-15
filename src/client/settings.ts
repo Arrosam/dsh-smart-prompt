@@ -10,16 +10,16 @@
  * bundle, and described structurally here, so a primitives version skew degrades to "no
  * settings section" instead of breaking the composer button.
  *
- * @module dsh-improve-prompt/client/settings
+ * @module dsh-smart-prompt/client/settings
  */
 
 import React from 'react'
 import { NS } from './locales.js'
 
 /** Profile entry id of the host half (cordis.patch.yml) — the configForms key. */
-export const ENTRY_ID = 'dsh-improve-prompt'
+export const ENTRY_ID = 'dsh-smart-prompt'
 /** Package name — the `plugins.bundle.config` key. */
-export const PACKAGE_NAME = 'dsh-improve-prompt'
+export const PACKAGE_NAME = 'dsh-smart-prompt'
 
 /** Field names, as declared in the host Config. */
 export const FIELD = {
@@ -187,7 +187,7 @@ export interface SettingsActions {
 export type SettingsProps = SettingsActions & {
   view: 'summary' | 'page'
   t: TFn
-  useImprovePromptSettings: (selector: (state: SettingsState) => SettingsState) => SettingsState
+  useSmartPromptSettings: (selector: (state: SettingsState) => SettingsState) => SettingsState
 }
 
 /**
@@ -198,9 +198,9 @@ export type SettingsProps = SettingsActions & {
  */
 export function SettingsSection(primitives: Primitives): (props: SettingsProps) => React.ReactElement | null {
   const { SettingsForm, SegmentedControl } = primitives
-  return function ImprovePromptSettings(props: SettingsProps): React.ReactElement | null {
+  return function SmartPromptSettings(props: SettingsProps): React.ReactElement | null {
     const { t } = props
-    const state = props.useImprovePromptSettings((s) => s)
+    const state = props.useSmartPromptSettings((s) => s)
     const baseId = React.useId()
     if (props.view === 'summary') return null
     const disabled = !state.writable || state.saving

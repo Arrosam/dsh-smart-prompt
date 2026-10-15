@@ -1,0 +1,24 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Prompt card (the draft) with two text lines. -->
+  <g mask="url(#dsp_cut)">
+    <rect x="5" y="10" width="20" height="20" rx="4.5" fill="url(#dsp_card)"/>
+  <rect x="9" y="17" width="10" height="2.2" rx="1.1" fill="#FFFFFF" fill-opacity="0.9"/>
+  <rect x="9" y="22" width="6.5" height="2.2" rx="1.1" fill="#FFFFFF" fill-opacity="0.65"/>
+  </g>
+  <!-- Sparkle (the refinement); the mask above cuts a gap into the card so it reads at small sizes on any theme. -->
+  <path d="M25 3l1.9 5.3a2.4 2.4 0 0 0 1.5 1.5L33.7 11.7l-5.3 1.9a2.4 2.4 0 0 0-1.5 1.5L25 20.4l-1.9-5.3a2.4 2.4 0 0 0-1.5-1.5L16.3 11.7l5.3-1.9a2.4 2.4 0 0 0 1.5-1.5L25 3z" fill="url(#dsp_spark)"/>
+  <defs>
+    <mask id="dsp_cut" maskUnits="userSpaceOnUse" x="0" y="0" width="36" height="36">
+      <rect width="36" height="36" fill="#FFFFFF"/>
+      <path d="M25 3l1.9 5.3a2.4 2.4 0 0 0 1.5 1.5L33.7 11.7l-5.3 1.9a2.4 2.4 0 0 0-1.5 1.5L25 20.4l-1.9-5.3a2.4 2.4 0 0 0-1.5-1.5L16.3 11.7l5.3-1.9a2.4 2.4 0 0 0 1.5-1.5L25 3z" fill="#000000" stroke="#000000" stroke-width="3.2" stroke-linejoin="round"/>
+    </mask>
+    <linearGradient id="dsp_card" x1="15" y1="10" x2="15" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#69B9FF"/>
+      <stop offset="1" stop-color="#324DE2"/>
+    </linearGradient>
+    <linearGradient id="dsp_spark" x1="25" y1="3" x2="25" y2="20.4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#45E7A4"/>
+      <stop offset="1" stop-color="#05909D"/>
+    </linearGradient>
+  </defs>
+</svg>

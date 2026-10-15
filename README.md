@@ -1,4 +1,6 @@
-# dsh-improve-prompt
+# dsh-smart-prompt
+
+> 本插件 fork 自 hoyyang 的 [dsh-improve-prompt](https://github.com/hoyyang/dsh-improve-prompt)（MIT），现更名为 **dsh-smart-prompt**。下文的历史记录描述的是原项目。
 
 ![banner](https://raw.githubusercontent.com/hoyyang/dsh-improve-prompt/main/assets/banner.jpg)
 
@@ -19,15 +21,14 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-improve-prompt
+dsh plugin --profile web add github:Arrosam/dsh-smart-prompt
 # 或直接从 GitHub 装（构建产物已随仓库提交，无需本地构建）
-dsh plugin --profile web add github:hoyyang/dsh-improve-prompt
 ```
 
 重启 `dsh web`，输入框工具行（发送键左侧）出现 **✦** 即成功。**零配置**：不需要 API Key，走 harness 自带的模型服务与凭据存储。最低 `dsh >= 0.1.1-rc.2`（实测 `0.1.5-rc.1`）。
 
 ```sh
-dsh plugin --profile web remove dsh-improve-prompt   # 卸载
+dsh plugin --profile web remove dsh-smart-prompt   # 卸载
 ```
 
 ## 核心功能
@@ -43,8 +44,8 @@ dsh plugin --profile web remove dsh-improve-prompt   # 卸载
 - **失败即原文** — 无模型 / 超时 / 空输出 / 网络失败时**绝不改动**你的输入，只给一句可读提示。
 - **智能会话上下文** — 草稿含指代（它 / 那个 / 刚才 / it / this）或 ≤12 字无实词时自动**携带**最近 N 轮「你的原话 + 助手正文结论尾部」；本地正则判定，零额外调用。工具结果、注入上下文、图片、源码一律不带。
 - **零配置开箱** — 不需要 API Key；可选配置项全部有默认值（见「进阶用法」），不配置也能用。
-- **提示词模板可覆盖** — 行为知识全在 `prompts/*.md`，把同名文件放进 `$DSH_HOME/dsh-improve-prompt/prompts/` 即可**替换**纪律层与档位模板，不改一行代码。
-- **本地 HTTP 接口** — `POST /dsh-improve-prompt/api/improve` 把增强能力**暴露**给自己的脚本与工具（仅回环）。
+- **提示词模板可覆盖** — 行为知识全在 `prompts/*.md`，把同名文件放进 `$DSH_HOME/dsh-smart-prompt/prompts/` 即可**替换**纪律层与档位模板，不改一行代码。
+- **本地 HTTP 接口** — `POST /dsh-smart-prompt/api/improve` 把增强能力**暴露**给自己的脚本与工具（仅回环）。
 - **短草稿保护** — 长度预算取 `max(200, 字数 × 比例)`，三行以内的短草稿不会被比例预算误杀（该缺陷在实机测试中发现并已修复，有 4 个测试锁死）。
 
 ### 和已有 5 个同类插件差在哪
@@ -84,7 +85,7 @@ dsh plugin --profile web remove dsh-improve-prompt   # 卸载
 
 ```sh
 # 用本地 HTTP 接口把增强能力接进脚本（仅回环）
-curl -X POST http://127.0.0.1:3080/dsh-improve-prompt/api/improve \
+curl -X POST http://127.0.0.1:3080/dsh-smart-prompt/api/improve \
   -H 'content-type: application/json' \
   -d '{"text":"把那个接口加上限流","sessionId":"sess-1","mode":"standard"}'
 ```
@@ -98,8 +99,8 @@ curl -X POST http://127.0.0.1:3080/dsh-improve-prompt/api/improve \
 
 ```sh
 # 把同名模板放进该目录即生效
-cp my-discipline.md $DSH_HOME/dsh-improve-prompt/prompts/discipline.md
-cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
+cp my-discipline.md $DSH_HOME/dsh-smart-prompt/prompts/discipline.md
+cp my-standard.md $DSH_HOME/dsh-smart-prompt/prompts/standard.md
 ```
 
 调整默认档位与上限（配置键说明见「进阶用法」）：
@@ -107,7 +108,7 @@ cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
 ```yaml
 # profile 的 cordis.patch.yml 片段
 - insert:
-    - id: dsh-improve-prompt
+    - id: dsh-smart-prompt
       config:
         defaultMode: light
         standardMaxRatio: 2.5
@@ -153,7 +154,7 @@ cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
 5. **点错了 / 结果不满意** —— 8 秒内点「撤回」恢复原文；你一旦手动编辑过，撤回条自动消失，绝不覆盖你的新输入。
 6. **空泛草稿不硬编** —— 「加个功能」这类输入不会被编成一份虚构需求书：模型被纪律层要求"宁可不改也不编"，你看到的是原样返回或结构化 (TBD) 追问。
 7. **斜杠命令带长正文** —— `/bugfix <一大段复述>`：前缀逐字保留，只有正文被改写成排查步骤清晰的版本，命令解析不受影响。
-8. **脚本与工具集成** —— 通过 `POST /dsh-improve-prompt/api/improve` 把同一套增强管线接进你自己的脚本、CI 或编辑器工具，仅回环不出网。
+8. **脚本与工具集成** —— 通过 `POST /dsh-smart-prompt/api/improve` 把同一套增强管线接进你自己的脚本、CI 或编辑器工具，仅回环不出网。
 9. **中英混合草稿** —— 中文句子里夹英文路径、函数名、版本号：保真闸把它们当硬事实逐字保留，翻译腔不会吃掉标识符。
 10. **长草稿怕膨胀** —— 口语化长段输入标准档：结构化重述受 2.5x 预算约束，超预算先收敛一次，仍超则拒绝写回，不会悄悄给你三十行规格书。
 11. **报错原文直接贴** —— 把栈报错或校验日志整段贴进草稿：路径、类名、版本号被当硬事实逐字保留，你的诉求被改写成一句可执行的排查请求。
@@ -222,7 +223,7 @@ cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
 
 - **改配置** —— `cordis.patch.yml` 调整默认档位、长度上限、超时、上下文轮数（见下方配置表）。
 - **改提示词** —— 覆盖 `prompts/*.md` 模板，纪律层与档位文案随你改，不动代码。
-- **接脚本** —— `POST /dsh-improve-prompt/api/improve` 把增强能力接进脚本与工具。
+- **接脚本** —— `POST /dsh-smart-prompt/api/improve` 把增强能力接进脚本与工具。
 
 ### 配置
 
@@ -230,8 +231,8 @@ cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
 
 ```yaml
 - insert:
-    - id: dsh-improve-prompt
-      name: 'dsh-improve-prompt'
+    - id: dsh-smart-prompt
+      name: 'dsh-smart-prompt'
       config:
         defaultMode: standard      # light | standard
         lightMaxRatio: 1.2         # 轻档长度上限
@@ -256,11 +257,11 @@ cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
 
 ### 改提示词不用改代码
 
-行为知识全在 `prompts/*.md`：`discipline.md`（全局纪律）+ `light.md` / `standard.md`（档位模板）。覆盖方式：把同名文件放到 `$DSH_HOME/dsh-improve-prompt/prompts/`。
+行为知识全在 `prompts/*.md`：`discipline.md`（全局纪律）+ `light.md` / `standard.md`（档位模板）。覆盖方式：把同名文件放到 `$DSH_HOME/dsh-smart-prompt/prompts/`。
 
 ### 本地 HTTP 接口
 
-`GET /dsh-improve-prompt/api/config` 读当前档位与上限；`POST /dsh-improve-prompt/api/improve`（body `{text, sessionId?, mode?}`）执行增强。仅回环。
+`GET /dsh-smart-prompt/api/config` 读当前档位与上限；`POST /dsh-smart-prompt/api/improve`（body `{text, sessionId?, mode?}`）执行增强。仅回环。
 
 ## 工作原理
 

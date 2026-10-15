@@ -5,7 +5,7 @@
  * prompt, to "preserve the original details". None of them checks whether it did.
  * This module checks, deterministically, and then repairs.
  *
- * @module dsh-improve-prompt/fidelity
+ * @module dsh-smart-prompt/fidelity
  */
 
 import { anchorSurvives, normalizeForMatch, stripWhitespace, type Anchor } from './anchors.js'

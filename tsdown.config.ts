@@ -1,6 +1,6 @@
 import type { UserConfig } from 'tsdown'
 
-const PLUGIN_ID = 'dsh-improve-prompt'
+const PLUGIN_ID = 'dsh-smart-prompt'
 
 const CLIENT_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',

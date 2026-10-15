@@ -6,7 +6,7 @@
  * code, @references. The gate is deliberately DETERMINISTIC (no model call): it
  * extracts anchors from the draft, then verifies each one literally survives.
  *
- * @module dsh-improve-prompt/anchors
+ * @module dsh-smart-prompt/anchors
  */
 /** What kind of hard fact an anchor is. */
 export type AnchorKind = 'code' | 'url' | 'path' | 'ref' | 'version' | 'number' | 'identifier';

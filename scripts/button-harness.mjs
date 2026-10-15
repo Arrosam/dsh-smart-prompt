@@ -125,7 +125,7 @@ const vars = (t) => Object.entries(THEMES[t]).filter(([k]) => k.startsWith('--')
 
 const row = (theme) => [
   '<section class="row" data-theme="' + theme + '" style="' + vars(theme) + ';background:' + THEMES[theme].page + '">',
-  '  <div class="side"><div class="cap" style="color:' + THEMES[theme].cap + '">dsh-improve-prompt</div>',
+  '  <div class="side"><div class="cap" style="color:' + THEMES[theme].cap + '">dsh-smart-prompt</div>',
   '    <div class="seatwrap" id="mine-' + theme + '">' + markup + '</div></div>',
   '  <div class="side"><div class="cap" style="color:' + THEMES[theme].cap + '">dsh-plan-board (reference)</div>',
   '    <div class="seatwrap" id="theirs-' + theme + '">' + pbButton + '</div></div>',

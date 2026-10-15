@@ -1,7 +1,7 @@
 /**
  * Plugin configuration: schema, defaults, and defensive resolution.
  *
- * @module dsh-improve-prompt/config
+ * @module dsh-smart-prompt/config
  */
 import z from '@deepseek-ai/schemastery';
 /** Enhancement mode. */

@@ -2,7 +2,7 @@
  * Output normalization: turn whatever the model returned into the exact text that
  * belongs back in the composer.
  *
- * @module dsh-improve-prompt/normalize
+ * @module dsh-smart-prompt/normalize
  */
 
 /** Openers a rewrite must never carry, checked case-insensitively against the first line. */

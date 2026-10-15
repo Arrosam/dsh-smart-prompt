@@ -5,7 +5,7 @@
  * tests — the gates are the product, so they are verified deterministically rather
  * than by hoping a real model misbehaves.
  *
- * @module dsh-improve-prompt/orchestrate
+ * @module dsh-smart-prompt/orchestrate
  */
 import { type Mode, type ResolvedConfig } from './config.js';
 import { type LlmFace, type Route } from './llm-call.js';

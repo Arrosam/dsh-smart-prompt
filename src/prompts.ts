@@ -2,10 +2,10 @@
  * External prompt loading: behaviour lives in `prompts/*.md`, not in code, so a
  * user can retune the plugin without touching TypeScript.
  *
- * Resolution order per file: `$DSH_HOME/dsh-improve-prompt/prompts/<name>.md`
+ * Resolution order per file: `$DSH_HOME/dsh-smart-prompt/prompts/<name>.md`
  * (user override) then the packaged `prompts/<name>.md`.
  *
- * @module dsh-improve-prompt/prompts
+ * @module dsh-smart-prompt/prompts
  */
 
 import { readFileSync } from 'node:fs'
@@ -28,7 +28,7 @@ function shippedDir(): string {
 
 /** Where a user may drop their own prompt overrides. */
 export function userPromptDir(): string {
-  return join(dshHome(), 'dsh-improve-prompt', 'prompts')
+  return join(dshHome(), 'dsh-smart-prompt', 'prompts')
 }
 
 function readPrompt(name: string, fallback: string): string {

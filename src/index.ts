@@ -1,5 +1,5 @@
 /**
- * dsh-improve-prompt — host half.
+ * dsh-smart-prompt — host half.
  *
  * One loopback route that rewrites a composer draft into a sharper, agent-ready
  * prompt, wrapped in two deterministic gates that no other prompt enhancer in the
@@ -14,7 +14,7 @@
  *
  * At most TWO model calls per click (one generation + one repair), never a pipeline.
  *
- * @module dsh-improve-prompt
+ * @module dsh-smart-prompt
  */
 
 import z from '@deepseek-ai/schemastery'
@@ -38,7 +38,7 @@ export interface HostContext {
 }
 
 /** Cordis plugin name. */
-export const name = 'dsh-improve-prompt'
+export const name = 'dsh-smart-prompt'
 
 /** Required services: the model registry and the HTTP carrier. */
 export const inject = ['llm', 'webServer']
@@ -46,7 +46,7 @@ export const inject = ['llm', 'webServer']
 export { Config } from './config.js'
 
 /** Route namespace. */
-const API = '/dsh-improve-prompt/api'
+const API = '/dsh-smart-prompt/api'
 
 /** Request body cap; the composer limit is far lower, this only stops abuse. */
 const MAX_BODY_BYTES = 512 * 1024
@@ -196,12 +196,12 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
         // Every refusal is observable: the handled failure payloads below used to
         // return silently, leaving nothing in the host log to diagnose with.
         if (result.ok === false && config.logFailures) {
-          log?.warn?.('[dsh-improve-prompt] ' + result.code + ' (' + String(Date.now() - started) + 'ms): ' + result.message)
+          log?.warn?.('[dsh-smart-prompt] ' + result.code + ' (' + String(Date.now() - started) + 'ms): ' + result.message)
         }
         sendJson(res, 200, result)
       } catch (error) {
         if (clientGone) return
-        if (config.logFailures) log?.warn?.('[dsh-improve-prompt] ' + (error instanceof Error ? error.message : String(error)))
+        if (config.logFailures) log?.warn?.('[dsh-smart-prompt] ' + (error instanceof Error ? error.message : String(error)))
         sendJson(res, 200, {
           ok: false,
           code: ERR.UNKNOWN,
@@ -209,5 +209,5 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
         })
       }
     },
-  }), 'dsh-improve-prompt: improve api')
+  }), 'dsh-smart-prompt: improve api')
 }

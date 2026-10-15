@@ -12,10 +12,10 @@
  *   `.dip-btn`     — the improve action; sparkle icon in `currentColor`
  *   `.dip-revert` / `.dip-divider` / `.dip-retry` — the refined state's two halves
  *
- * @module dsh-improve-prompt/client/styles
+ * @module dsh-smart-prompt/client/styles
  */
 
-export const STYLE_ATTR = 'dsh-improve-prompt'
+export const STYLE_ATTR = 'dsh-smart-prompt'
 
 /** Hover/press fill for every half of the capsule: the host's interactive hover token. */
 const HOVER_BG = 'var(--dsw-alias-interactive-bg-hover)'

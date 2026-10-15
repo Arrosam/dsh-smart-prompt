@@ -1,7 +1,8 @@
 {
-  "name": "dsh-improve-prompt",
-  "version": "0.7.3",
-  "description": "一键把输入框草稿改写为更清晰、更贴 Agent 执行的提示词：直接替换 + 一键撤回，带保真闸与长度闸。",
+  "name": "dsh-smart-prompt",
+  "version": "0.8.0",
+  "description": "Rewrite the composer draft into a clearer, agent-ready prompt in one click, with Revert and Retry. 一键把输入框草稿改写为更清晰、更贴 Agent 执行的提示词。",
+  "icon": "./assets/icon.svg",
   "publishConfig": {
     "access": "public"
   },
@@ -11,6 +12,7 @@
   "files": [
     "lib",
     "prompts",
+    "assets/icon.svg",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
@@ -18,14 +20,14 @@
     "LICENSE"
   ],
   "license": "MIT",
-  "author": "hoyyang",
+  "author": "Samuel Lin (fork of dsh-improve-prompt by hoyyang)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hoyyang/dsh-improve-prompt.git"
+    "url": "git+https://github.com/Arrosam/dsh-smart-prompt.git"
   },
-  "homepage": "https://github.com/hoyyang/dsh-improve-prompt#readme",
+  "homepage": "https://github.com/Arrosam/dsh-smart-prompt#readme",
   "bugs": {
-    "url": "https://github.com/hoyyang/dsh-improve-prompt/issues"
+    "url": "https://github.com/Arrosam/dsh-smart-prompt/issues"
   },
   "keywords": [
     "deepseek-harness",

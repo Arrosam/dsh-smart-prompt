@@ -1,11 +1,11 @@
-# dsh-improve-prompt bundle 装配清单。
+# dsh-smart-prompt bundle 装配清单。
 # 列入 profile bundles 时由官方 boot 层按此清单装配；勿删除本文件，
 # package.json 的 dsh.bundle.patch 指向它，缺了冷启动直接报错。
 # config 全部可选（默认值见 src/config.ts）；在 profile 的 cordis.patch.yml 里用
-#   - id: dsh-improve-prompt
+#   - id: dsh-smart-prompt
 #     config: { defaultMode: light }
 # 覆盖。
 - insert:
-    - id: dsh-improve-prompt
-      name: 'dsh-improve-prompt'
+    - id: dsh-smart-prompt
+      name: 'dsh-smart-prompt'
       config: {}

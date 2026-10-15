@@ -106,13 +106,13 @@ function okResponse(over = {}) {
 
 test('the built bundle registers exactly the two composer entries under the right ids', async () => {
   const { id, module, registered } = await boot()
-  assert.equal(id, 'dsh-improve-prompt')
+  assert.equal(id, 'dsh-smart-prompt')
   assert.deepEqual(module.inject, ['slots', 'locale'])
   assert.equal(registered.length, 2)
   assert.deepEqual(registered.map((r) => r.options.name), ['conversation.input.right', 'conversation.input.overlay'])
-  assert.deepEqual(registered.map((r) => r.options.id), ['dsh-improve-prompt-button', 'dsh-improve-prompt-bar'])
+  assert.deepEqual(registered.map((r) => r.options.id), ['dsh-smart-prompt-button', 'dsh-smart-prompt-bar'])
   for (const entry of registered) {
-    assert.equal(entry.options.locale, 'dsh-improve-prompt', 'every entry is localizable')
+    assert.equal(entry.options.locale, 'dsh-smart-prompt', 'every entry is localizable')
     assert.deepEqual(entry.options.inject('s9'), { sessionId: 's9' }, 'the session id reaches the component')
   }
 })
@@ -192,7 +192,7 @@ test('clicking posts the draft and writes the enhanced text back', async () => {
     await TestRenderer.act(async () => { await renderer.root.findAllByProps({ className: 'dip-btn' })[0].props.onClick() })
 
     assert.equal(calls.length, 1)
-    assert.equal(calls[0].url, '/dsh-improve-prompt/api/improve')
+    assert.equal(calls[0].url, '/dsh-smart-prompt/api/improve')
     assert.equal(calls[0].body.sessionId, 's1')
     assert.equal(calls[0].body.mode, undefined, 'the host reads the mode from the plugin settings')
     assert.equal(calls[0].body.text, '把那个接口加上限流')
@@ -426,7 +426,7 @@ test('the stylesheet is a plain capsule in host tokens', async () => {
 test('the injected stylesheet is scoped by a plugin data attribute', async () => {
   const source = await import('node:fs').then((fs) => fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'))
   assert.match(source, /data-plugin/)
-  assert.match(source, /dsh-improve-prompt/)
+  assert.match(source, /dsh-smart-prompt/)
 })
 /**
  * Fake host primitives with the same contract as dsh-client-ui-primitives: a staged
@@ -466,7 +466,7 @@ async function bootWithSettings(value) {
   const { ctx, registered } = fakeCtx()
   const scope = { getSnapshot: () => ({ status: 'ready', value, writable: true }), subscribe: () => () => {} }
   ctx.get = (name) => {
-    if (name === 'configForms') return { get: (id) => { assert.equal(id, 'dsh-improve-prompt'); return scope }, whileServed: (_ns, register) => register() }
+    if (name === 'configForms') return { get: (id) => { assert.equal(id, 'dsh-smart-prompt'); return scope }, whileServed: (_ns, register) => register() }
     if (name === 'remote') return { session: { modelCatalog: async () => ({ ok: true, value: { groups: [{ id: 'p', name: 'Provider', models: [{ id: 'm1', name: 'Model One', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }] } }) } }
     return undefined
   }
@@ -490,8 +490,8 @@ async function loadClientModuleWith(primitives) {
 
 async function mountSection(entry) {
   const face = entry.options.inject()
-  const store = face.hooks.improvePromptSettings
-  const props = { ...face, view: 'page', t: (k) => k, useImprovePromptSettings: (sel) => sel(store.getSnapshot()) }
+  const store = face.hooks.smartPromptSettings
+  const props = { ...face, view: 'page', t: (k) => k, useSmartPromptSettings: (sel) => sel(store.getSnapshot()) }
   delete props.hooks
   const renderer = await mount(entry.component, props)
   const rerender = async () => { await TestRenderer.act(async () => { renderer.update(React.createElement(entry.component, props)) }) }
@@ -503,7 +503,7 @@ test('the settings section registers on the plugin page only when the host serve
   assert.equal(registered.some((r) => r.options.name === 'plugins.bundle.config'), false, 'no settings section without configForms')
   const entry = await bootWithSettings({ defaultMode: 'standard', modelSource: 'conversation' })
   assert.ok(entry !== undefined)
-  assert.equal(entry.options.key, 'dsh-improve-prompt', 'keyed by package name')
+  assert.equal(entry.options.key, 'dsh-smart-prompt', 'keyed by package name')
 })
 
 test('the section shows the mode and model-source choices from the saved settings', async () => {

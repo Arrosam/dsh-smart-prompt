@@ -2,7 +2,7 @@
  * The two visible pieces: the composer button (star, or Revert | Retry after a refine)
  * and the status bar.
  *
- * @module dsh-improve-prompt/client/components
+ * @module dsh-smart-prompt/client/components
  */
 
 import React from 'react'
@@ -24,7 +24,7 @@ export interface SeatProps {
   t: TFn
 }
 
-const API = '/dsh-improve-prompt/api/improve'
+const API = '/dsh-smart-prompt/api/improve'
 
 /**
  * Keep a press on the chip from taking focus out of the composer.

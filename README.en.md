@@ -1,4 +1,6 @@
-# dsh-improve-prompt
+# dsh-smart-prompt
+
+> Fork of [dsh-improve-prompt](https://github.com/hoyyang/dsh-improve-prompt) by hoyyang (MIT), renamed **dsh-smart-prompt**. The history below describes the original project.
 
 ![banner](https://raw.githubusercontent.com/hoyyang/dsh-improve-prompt/main/assets/banner.jpg)
 
@@ -19,15 +21,14 @@
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-improve-prompt
+dsh plugin --profile web add github:Arrosam/dsh-smart-prompt
 # or straight from GitHub (prebuilt lib/ is committed — no local build needed)
-dsh plugin --profile web add github:hoyyang/dsh-improve-prompt
 ```
 
 Restart `dsh web`; a **✦** appears in the composer tool row, left of the submit action. **Zero configuration** — no API key; it uses the harness's own model service and credential store. Requires `dsh >= 0.1.1-rc.2` (verified on `0.1.5-rc.1`).
 
 ```sh
-dsh plugin --profile web remove dsh-improve-prompt   # uninstall
+dsh plugin --profile web remove dsh-smart-prompt   # uninstall
 ```
 
 ## Core features
@@ -43,8 +44,8 @@ dsh plugin --profile web remove dsh-improve-prompt   # uninstall
 - **Failure keeps your draft** — no model, timeout, empty output, network error: your input is **never touched**, you just get one readable message.
 - **Smart session context** — history is **attached** only when the draft cannot stand alone (anaphora like it / this, or a ≤12-character draft): your own words plus the tail of the assistant's prose. The decision is a local regex, zero extra calls; tool results, injected context, images and source code never travel.
 - **Zero-config out of the box** — no API key required; every optional setting has a default (see *Advanced usage*).
-- **Prompt templates are overridable** — all behaviour lives in `prompts/*.md`; drop same-named files into `$DSH_HOME/dsh-improve-prompt/prompts/` to **replace** the discipline layer and mode templates without touching code.
-- **Local HTTP surface** — `POST /dsh-improve-prompt/api/improve` **exposes** the same pipeline to your scripts and tools (loopback only).
+- **Prompt templates are overridable** — all behaviour lives in `prompts/*.md`; drop same-named files into `$DSH_HOME/dsh-smart-prompt/prompts/` to **replace** the discipline layer and mode templates without touching code.
+- **Local HTTP surface** — `POST /dsh-smart-prompt/api/improve` **exposes** the same pipeline to your scripts and tools (loopback only).
 - **Short-draft protection** — the budget is `max(200, length × ratio)`, so a three-line draft is never killed by the ratio (a real flaw found in live testing, locked down by four tests).
 
 ### How it differs from the five existing enhancers
@@ -84,7 +85,7 @@ Script and tool integration:
 
 ```sh
 # wire the enhancer into your own scripts via the local HTTP surface (loopback only)
-curl -X POST http://127.0.0.1:3080/dsh-improve-prompt/api/improve \
+curl -X POST http://127.0.0.1:3080/dsh-smart-prompt/api/improve \
   -H 'content-type: application/json' \
   -d '{"text":"把那个接口加上限流","sessionId":"sess-1","mode":"standard"}'
 ```
@@ -98,8 +99,8 @@ Override the prompt templates without touching code:
 
 ```sh
 # drop same-named files into this directory to take effect
-cp my-discipline.md $DSH_HOME/dsh-improve-prompt/prompts/discipline.md
-cp my-standard.md $DSH_HOME/dsh-improve-prompt/prompts/standard.md
+cp my-discipline.md $DSH_HOME/dsh-smart-prompt/prompts/discipline.md
+cp my-standard.md $DSH_HOME/dsh-smart-prompt/prompts/standard.md
 ```
 
 Change the default mode and ceilings (keys explained under *Advanced usage*):
@@ -107,7 +108,7 @@ Change the default mode and ceilings (keys explained under *Advanced usage*):
 ```yaml
 # a snippet of the profile's cordis.patch.yml
 - insert:
-    - id: dsh-improve-prompt
+    - id: dsh-smart-prompt
       config:
         defaultMode: light
         standardMaxRatio: 2.5
@@ -153,7 +154,7 @@ Worst case **5.43:1** (disabled label; WCAG AA wants >= 4.5:1) — the caret is 
 5. **A mis-click or a result you dislike** — press Undo within 8 seconds. The moment you edit by hand the bar disappears, so your new input is never overwritten.
 6. **A vague draft is never padded** — something like "加个功能" is never invented into a fabricated spec: the discipline layer tells the model to leave it alone, so you get it back unchanged or with explicit (TBD) follow-ups.
 7. **A slash command with a long body** — `/bugfix <a rambling account>`: the prefix survives verbatim and only the body becomes a clearly structured investigation request; command parsing is unaffected.
-8. **Script and tool integration** — `POST /dsh-improve-prompt/api/improve` wires the same pipeline into your own scripts, CI or editor tooling, loopback only.
+8. **Script and tool integration** — `POST /dsh-smart-prompt/api/improve` wires the same pipeline into your own scripts, CI or editor tooling, loopback only.
 9. **Mixed Chinese-English drafts** — English paths, function names and versions inside Chinese prose: the fidelity gate treats them as hard facts and keeps them verbatim; no translation pass eats your identifiers.
 10. **Long drafts afraid of bloat** — a colloquial wall of text in Standard mode: restructuring is capped at 2.5x, over-budget results get one convergence call, and anything still over is refused instead of silently becoming a thirty-line spec.
 11. **Paste the error verbatim** — drop a whole stack trace or validation log into the draft: class names, paths and versions are kept as hard facts while your ask is rewritten into one executable investigation request.
@@ -222,7 +223,7 @@ Everything is optional and everything has a default; three paths to adjust behav
 
 - **Retune settings** — `cordis.patch.yml` changes the default mode, length ceilings, timeout and context depth (table below).
 - **Retune the prompts** — override the `prompts/*.md` templates; the discipline layer and mode copy are yours to edit, no code touched.
-- **Wire up scripts** — `POST /dsh-improve-prompt/api/improve` plugs the pipeline into your own tooling.
+- **Wire up scripts** — `POST /dsh-smart-prompt/api/improve` plugs the pipeline into your own tooling.
 
 ### Configuration
 
@@ -230,8 +231,8 @@ Set it in the profile's `cordis.patch.yml`:
 
 ```yaml
 - insert:
-    - id: dsh-improve-prompt
-      name: 'dsh-improve-prompt'
+    - id: dsh-smart-prompt
+      name: 'dsh-smart-prompt'
       config:
         defaultMode: standard      # light | standard
         lightMaxRatio: 1.2
@@ -256,11 +257,11 @@ Set it in the profile's `cordis.patch.yml`:
 
 ### Retune the prompts without touching code
 
-All behaviour lives in `prompts/*.md`: `discipline.md` (the global discipline layer) plus `light.md` / `standard.md`. Override by dropping same-named files into `$DSH_HOME/dsh-improve-prompt/prompts/`.
+All behaviour lives in `prompts/*.md`: `discipline.md` (the global discipline layer) plus `light.md` / `standard.md`. Override by dropping same-named files into `$DSH_HOME/dsh-smart-prompt/prompts/`.
 
 ### Local HTTP surface
 
-`GET /dsh-improve-prompt/api/config` reports the active mode and ceilings; `POST /dsh-improve-prompt/api/improve` (body `{text, sessionId?, mode?}`) performs one enhancement. Loopback only.
+`GET /dsh-smart-prompt/api/config` reports the active mode and ceilings; `POST /dsh-smart-prompt/api/improve` (body `{text, sessionId?, mode?}`) performs one enhancement. Loopback only.
 
 ## How it works
 

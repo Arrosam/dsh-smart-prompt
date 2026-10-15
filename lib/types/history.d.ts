@@ -5,7 +5,7 @@
  * contents, command output) and plugin-injected context are excluded by design, so
  * enabling context never leaks project data the user did not type.
  *
- * @module dsh-improve-prompt/history
+ * @module dsh-smart-prompt/history
  */
 /** One question/answer pair from the session. */
 export interface HistoryTurn {

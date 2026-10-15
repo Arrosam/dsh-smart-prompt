@@ -14,7 +14,7 @@
  * Neither sprite is ever placed under the label - see styles.ts for the layer order
  * and scripts/button-harness.mjs for the machine check of that guarantee.
  *
- * @module dsh-improve-prompt/client/assets
+ * @module dsh-smart-prompt/client/assets
  */
 
 /** Compact four-point spark - sits on the icon, never over the label. */

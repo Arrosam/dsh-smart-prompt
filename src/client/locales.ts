@@ -3,11 +3,11 @@
  * Host errors carry stable codes; the codes are translated here so the message
  * matches the interface language rather than the host's.
  *
- * @module dsh-improve-prompt/client/locales
+ * @module dsh-smart-prompt/client/locales
  */
 
 /** Locale namespace. */
-export const NS = 'dsh-improve-prompt'
+export const NS = 'dsh-smart-prompt'
 
 export const zh: Record<string, string> = {
   buttonAria: '把草稿改写为更清晰、更贴 Agent 执行的提示词',

@@ -10,7 +10,7 @@
  * object. Type-only imports are erased at emit, so the built plugin carries no
  * runtime dependency on the harness at all.
  *
- * @module dsh-improve-prompt/llm-call
+ * @module dsh-smart-prompt/llm-call
  */
 import type { ResolvedConfig } from './config.js';
 /**

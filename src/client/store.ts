@@ -3,7 +3,7 @@
  * bar. Both live in the same client module instance, so a module-level map plus a
  * listener set is the whole mechanism — and the bar needs no slot props at all.
  *
- * @module dsh-improve-prompt/client/store
+ * @module dsh-smart-prompt/client/store
  */
 
 /** Mode the user picked. */

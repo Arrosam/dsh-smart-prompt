@@ -1,5 +1,5 @@
 /**
- * dsh-improve-prompt — host half.
+ * dsh-smart-prompt — host half.
  *
  * One loopback route that rewrites a composer draft into a sharper, agent-ready
  * prompt, wrapped in two deterministic gates that no other prompt enhancer in the
@@ -14,7 +14,7 @@
  *
  * At most TWO model calls per click (one generation + one repair), never a pipeline.
  *
- * @module dsh-improve-prompt
+ * @module dsh-smart-prompt
  */
 /**
  * The slice of the Cordis host context this plugin touches.
@@ -33,7 +33,7 @@ export interface HostContext {
     };
 }
 /** Cordis plugin name. */
-export declare const name = "dsh-improve-prompt";
+export declare const name = "dsh-smart-prompt";
 /** Required services: the model registry and the HTTP carrier. */
 export declare const inject: string[];
 export { Config } from './config.js';

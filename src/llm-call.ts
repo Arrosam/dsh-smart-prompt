@@ -10,7 +10,7 @@
  * object. Type-only imports are erased at emit, so the built plugin carries no
  * runtime dependency on the harness at all.
  *
- * @module dsh-improve-prompt/llm-call
+ * @module dsh-smart-prompt/llm-call
  */
 
 import type { ResolvedConfig } from './config.js'
@@ -76,7 +76,7 @@ export interface CallRequest {
 /** Reason a route could not be resolved. */
 export class NoRouteError extends Error {
   constructor() {
-    super('dsh-improve-prompt: no provider/model route available (pick a model in the plugin settings or in this conversation)')
+    super('dsh-smart-prompt: no provider/model route available (pick a model in the plugin settings or in this conversation)')
     this.name = 'NoRouteError'
   }
 }
@@ -93,7 +93,7 @@ let messageSeq = 0
 function userMessage(text: string): unknown {
   messageSeq += 1
   return Object.freeze({
-    id: 'dsh-improve-prompt-' + String(messageSeq),
+    id: 'dsh-smart-prompt-' + String(messageSeq),
     role: 'user',
     content: [Object.freeze({ type: 'text', text })],
     source: Object.freeze({ kind: 'user' }),
