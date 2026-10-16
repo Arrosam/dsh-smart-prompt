@@ -46,9 +46,11 @@ jobs:
           test -f prompts/discipline.md
           test -f prompts/light.md
           test -f prompts/standard.md
+          test -f prompts/questions.md
+          test -f prompts/answers.md
           node --check lib/client.js
           node -e "import('./lib/index.js').then((m) => {
-            if (m.name !== 'dsh-improve-prompt') throw new Error('unexpected plugin name: ' + m.name)
+            if (m.name !== 'dsh-smart-prompt') throw new Error('unexpected plugin name: ' + m.name)
             if (typeof m.apply !== 'function') throw new Error('missing apply()')
             if (!Array.isArray(m.inject)) throw new Error('missing inject declaration')
             console.log('host half loads: name=' + m.name + ' inject=' + JSON.stringify(m.inject))
