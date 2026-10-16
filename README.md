@@ -121,7 +121,7 @@ The built `lib/` is committed, so installing from GitHub needs no build.
 
 ## Credits
 
-Forked from [dsh-improve-prompt](https://github.com/hoyyang/dsh-improve-prompt) by hoyyang.
+Forked from [dsh-improve-prompt](https://github.com/hoyyang/dsh-improve-prompt) by hoyyang. See [CONTRIBUTORS](CONTRIBUTORS).
 
 ## License
 
