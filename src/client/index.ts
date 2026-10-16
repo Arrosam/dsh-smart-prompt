@@ -35,9 +35,18 @@ interface ConfigFormsFace {
   whileServed(namespaces: readonly string[], register: () => () => void): () => void
 }
 interface RemoteFace {
-  session?: { modelCatalog?: () => Promise<{ ok: boolean; value?: { groups?: readonly CatalogGroup[] } }> }
   $on?: (event: string, listener: () => void) => () => void
 }
+interface RemoteSessionFace {
+  modelCatalog?: () => Promise<{ ok: boolean; value?: { groups?: readonly CatalogGroup[] } }>
+}
+
+/**
+ * The Remote `session` namespace is its own service, `remote.session`, provided once the
+ * Host mounts it. Reading `remote.session` through the `remote` service throws unless the
+ * plugin injects it, and injecting it would gate the composer button on it.
+ */
+const REMOTE_SESSION_SERVICE = 'remote.session'
 
 interface LocaleFace {
   register(namespace: string, dicts: { zh: Record<string, string>; en: Record<string, string> }): () => void
@@ -163,7 +172,9 @@ export function apply(ctx: ClientContext): void {
   const primitives = loadPrimitives()
   if (configForms === undefined || primitives === undefined) return
   const loadCatalog = async (): Promise<readonly CatalogGroup[] | undefined> => {
-    const response = await remote?.session?.modelCatalog?.()
+    // Read at call time: the namespace may mount after this plugin applies.
+    const session = ctx.get?.(REMOTE_SESSION_SERVICE) as RemoteSessionFace | undefined
+    const response = await session?.modelCatalog?.()
     return response?.ok === true ? response.value?.groups ?? [] : undefined
   }
   const Section = SettingsSection(primitives)

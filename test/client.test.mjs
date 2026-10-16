@@ -467,7 +467,10 @@ async function bootWithSettings(value) {
   const scope = { getSnapshot: () => ({ status: 'ready', value, writable: true }), subscribe: () => () => {} }
   ctx.get = (name) => {
     if (name === 'configForms') return { get: (id) => { assert.equal(id, 'dsh-smart-prompt'); return scope }, whileServed: (_ns, register) => register() }
-    if (name === 'remote') return { session: { modelCatalog: async () => ({ ok: true, value: { groups: [{ id: 'p', name: 'Provider', models: [{ id: 'm1', name: 'Model One', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }] } }) } }
+    // As on the host: the session namespace is its own `remote.session` service, and
+    // reading it through `remote` without injecting it throws.
+    if (name === 'remote') return { get session() { throw new Error('cannot get property "remote.session" without inject') } }
+    if (name === 'remote.session') return { modelCatalog: async () => ({ ok: true, value: { groups: [{ id: 'p', name: 'Provider', models: [{ id: 'm1', name: 'Model One', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }] } }) }
     return undefined
   }
   await TestRenderer.act(async () => { module.apply(ctx) })
