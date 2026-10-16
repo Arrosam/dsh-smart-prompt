@@ -72,7 +72,12 @@ interface ClientContext {
   locale?: LocaleFace
   effect(fn: () => unknown | (() => void), label?: string): void
   get?(name: string): unknown
+  /** Cordis: run `apply` once every named service is provided, and undo it when one goes. */
+  inject?(services: readonly string[], apply: (inner: ClientContext & Record<string, unknown>) => unknown): unknown
 }
+
+/** Host service that serves plugin settings forms (`@deepseek-ai/dsh-client-ui-settings`). */
+const CONFIG_FORMS_SERVICE = 'configForms'
 
 /** The module loader's require, when the bundle runs under it. */
 declare const require: ((id: string) => unknown) | undefined
@@ -166,19 +171,46 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'dsh-smart-prompt: status bar')
 
-  // Plugins page (DSH 0.2+): the mode and model settings. Skipped quietly on hosts
-  // without the settings services, so the composer button never depends on them.
-  const configForms = ctx.get?.('configForms') as ConfigFormsFace | undefined
-  const remote = ctx.get?.('remote') as RemoteFace | undefined
+  // Plugins page (DSH 0.2+): the mode and model settings. Never on the plugin's own
+  // inject list, so the composer button never waits for the settings services.
   const primitives = loadPrimitives()
-  if (configForms === undefined || primitives === undefined) return
+  if (primitives === undefined) return
+  const Section = SettingsSection(primitives)
   const loadCatalog = async (): Promise<readonly CatalogGroup[] | undefined> => {
     // Read at call time: the namespace may mount after this plugin applies.
     const session = ctx.get?.(REMOTE_SESSION_SERVICE) as RemoteSessionFace | undefined
     const response = await session?.modelCatalog?.()
     return response?.ok === true ? response.value?.groups ?? [] : undefined
   }
-  const Section = SettingsSection(primitives)
+  // DSH does not order client plugin start-up, so `configForms` may not exist yet when
+  // this plugin applies; a one-off `ctx.get` then skipped the section for good (seen on
+  // fresh installs). `ctx.inject` waits for the service instead, and withdraws the
+  // section if the service goes away.
+  if (typeof ctx.inject === 'function') {
+    ctx.inject([CONFIG_FORMS_SERVICE], (inner) => {
+      mountSettings(inner, inner.get?.(CONFIG_FORMS_SERVICE) as ConfigFormsFace | undefined, primitives, Section, loadCatalog, t)
+    })
+  } else {
+    mountSettings(ctx, ctx.get?.(CONFIG_FORMS_SERVICE) as ConfigFormsFace | undefined, primitives, Section, loadCatalog, t)
+  }
+}
+
+/**
+ * Register the settings section on the Plugins page while the host serves its entry.
+ *
+ * @param ctx - context that owns the registration (disposed with it).
+ * @param configForms - the host settings-forms service; nothing is registered without it.
+ */
+function mountSettings(
+  ctx: ClientContext,
+  configForms: ConfigFormsFace | undefined,
+  primitives: Primitives,
+  Section: ReturnType<typeof SettingsSection>,
+  loadCatalog: () => Promise<readonly CatalogGroup[] | undefined>,
+  t: TFn,
+): void {
+  if (configForms === undefined) return
+  const remote = ctx.get?.('remote') as RemoteFace | undefined
   ctx.effect(() => {
     try {
       const section = settingsSection(primitives, configForms.get(ENTRY_ID), loadCatalog)

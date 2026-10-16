@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- **Fix**: the settings section could be missing from the Plugins page. DSH starts browser plugins in no fixed order, and when this plugin started before DSH's settings service, it skipped the section until the next restart. It now waits for the service.
+
 ## 0.9.0
 
 - **Follow-up questions**: when the draft is missing information only you can give, DSH's question card asks short questions (at most 5 by default; set it under **Follow-up questions** in the plugin settings). Your answers are folded into a second rewrite. If you answer "I don't know", the prompt tells the agent to find it out itself or to propose options. Skipping or closing the card keeps the first rewrite with its `(TBD: …)` notes.

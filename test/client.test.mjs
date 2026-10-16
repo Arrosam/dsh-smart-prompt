@@ -544,3 +544,20 @@ test('the follow-up question cap is editable and only whole numbers of at least 
     assert.equal(store.getSnapshot().invalid, invalid, JSON.stringify(text))
   }
 })
+
+test('the settings section appears when configForms is provided after the plugin starts', async () => {
+  const { module } = await loadClientModuleWith(fakePrimitives())
+  const { ctx, registered } = fakeCtx()
+  const scope = { getSnapshot: () => ({ status: 'ready', value: {}, writable: true }), subscribe: () => () => {} }
+  const forms = { get: () => scope, whileServed: (_ns, register) => register() }
+  // As in cordis: ctx.get finds nothing yet; ctx.inject runs its callback once the service exists.
+  let provide = null
+  ctx.inject = (names, apply) => {
+    assert.deepEqual(names, ['configForms'])
+    provide = () => apply({ ...ctx, get: (name) => (name === 'configForms' ? forms : undefined) })
+  }
+  await TestRenderer.act(async () => { module.apply(ctx) })
+  assert.equal(registered.some((r) => r.options.name === 'plugins.bundle.config'), false, 'not before the service exists')
+  await TestRenderer.act(async () => { provide() })
+  assert.equal(registered.some((r) => r.options.name === 'plugins.bundle.config'), true, 'registered once it is provided')
+})
