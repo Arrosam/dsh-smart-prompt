@@ -247,6 +247,9 @@ function certificate(meta: Meta, t: TFn): string {
   parts.push(meta.ratioLabel)
   parts.push((Math.round(meta.elapsedMs / 100) / 10).toFixed(1) + 's')
   if (meta.contextUsed !== 'none') parts.push(t('contextTag'))
+  if (meta.questions !== undefined && meta.questions.answered > 0) {
+    parts.push(t('answeredTag') + ' ' + String(meta.questions.answered) + '/' + String(meta.questions.asked))
+  }
   return parts.join(' \u00b7 ')
 }
 

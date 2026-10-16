@@ -458,7 +458,7 @@ function fakePrimitives() {
   }
   const SettingsForm = (props) => React.createElement('form', { 'data-invalid': String(props.state.invalid) }, props.children)
   const SegmentedControl = (props) => React.createElement('div', { 'data-segmented': props.id, 'data-value': props.value })
-  return { SettingsFormModel, settingsTextField: (field) => ({ field }), SettingsForm, SegmentedControl }
+  return { SettingsFormModel, settingsTextField: (field) => ({ field }), settingsNumberField: (field) => ({ field }), SettingsForm, SegmentedControl }
 }
 
 async function bootWithSettings(value) {
@@ -531,4 +531,16 @@ test('choosing a dedicated model stages provider, model and its default effort',
   assert.equal(state.invalid, false)
   const selects = renderer.root.findAll((n) => n.type === 'select')
   assert.equal(selects.length, 2, 'the chosen model offers its reasoning efforts')
+})
+
+test('the follow-up question cap is editable and only whole numbers of at least 1 can be saved', async () => {
+  const entry = await bootWithSettings({ defaultMode: 'standard', modelSource: 'conversation' })
+  const { face, store, renderer, rerender } = await mountSection(entry)
+  const input = () => renderer.root.find((n) => n.type === 'input' && n.props.type === 'number')
+  assert.equal(input().props.placeholder, '5', 'an empty field means the default of 5')
+  for (const [text, invalid] of [['3', false], ['0', true], ['2.5', true], ['', false]]) {
+    await TestRenderer.act(async () => { face.setMaxQuestions(text) })
+    await rerender()
+    assert.equal(store.getSnapshot().invalid, invalid, JSON.stringify(text))
+  }
 })

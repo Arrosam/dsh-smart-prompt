@@ -28,7 +28,13 @@ export const FIELD = {
   provider: 'provider',
   model: 'model',
   effort: 'dedicatedReasoningEffort',
+  maxQuestions: 'maxQuestions',
 } as const
+
+/** Shown when the field is empty; must match `DEFAULT_MAX_QUESTIONS` in the host config. */
+const DEFAULT_MAX_QUESTIONS = 5
+/** Smallest accepted question cap (the host schema's `min(1)`). */
+const MIN_QUESTIONS = 1
 
 export type TFn = (key: string) => string
 type Mode = 'standard' | 'light'
@@ -59,6 +65,7 @@ interface FormModel {
 export interface Primitives {
   SettingsFormModel: new (scope: unknown, specs: unknown[]) => FormModel
   settingsTextField(field: string): unknown
+  settingsNumberField(field: string): unknown
   SettingsForm: React.ComponentType<{ labels: Record<string, string>; state: Shell; onSave: () => void; onDiscard: () => void; children?: React.ReactNode }>
   SegmentedControl: React.ComponentType<{ id: string; value: string; options: readonly { value: string; label: string }[]; onChange: (next: string) => void; label: string; disabled?: boolean }>
 }
@@ -70,6 +77,8 @@ export interface SettingsState extends Shell {
   provider: string
   model: string
   effort: string
+  /** Draft text of the question cap; empty means the default. */
+  maxQuestions: string
   catalog: { status: 'idle' | 'loading' | 'ready' | 'error'; groups: readonly CatalogGroup[] }
 }
 
@@ -100,6 +109,7 @@ export function settingsSection(
     primitives.settingsTextField(FIELD.provider),
     primitives.settingsTextField(FIELD.model),
     primitives.settingsTextField(FIELD.effort),
+    primitives.settingsNumberField(FIELD.maxQuestions),
   ])
   let catalog: SettingsState['catalog'] = { status: 'idle', groups: [] }
   const catalogListeners = new Set<() => void>()
@@ -107,17 +117,21 @@ export function settingsSection(
     const source = pick<Source>(form.field(FIELD.source).text, ['conversation', 'dedicated'], 'conversation')
     const provider = form.field(FIELD.provider).text
     const model = form.field(FIELD.model).text
+    const maxQuestions = form.field(FIELD.maxQuestions).text
     const shell = form.shell()
     return {
       ...shell,
       // "Dedicated" without a model would silently fall back to the conversation's
-      // model, so it blocks the save instead.
-      invalid: shell.invalid || (source === 'dedicated' && (provider === '' || model === '')),
+      // model, so it blocks the save instead. The host schema rejects a cap below 1
+      // or a fraction, so those block the save here too.
+      invalid: shell.invalid || (source === 'dedicated' && (provider === '' || model === ''))
+        || (maxQuestions !== '' && !validQuestionCap(maxQuestions)),
       mode: pick<Mode>(form.field(FIELD.mode).text, ['standard', 'light'], 'standard'),
       source,
       provider,
       model,
       effort: form.field(FIELD.effort).text,
+      maxQuestions,
     }
   })
   // The model catalog is fetched state, not form state: merge it in with a cached
@@ -166,10 +180,16 @@ export function settingsSection(
       base.edit(FIELD.effort, effort)
     },
     setEffort: (effort) => { base.edit(FIELD.effort, effort) },
+    setMaxQuestions: (text) => { base.edit(FIELD.maxQuestions, text) },
     refreshCatalog,
   }
   if (stable.getSnapshot().source === 'dedicated') refreshCatalog()
   return { store: stable, actions, dispose: () => { disposed = true; form.dispose() } }
+}
+
+function validQuestionCap(text: string): boolean {
+  const value = Number(text)
+  return Number.isInteger(value) && value >= MIN_QUESTIONS
 }
 
 /** Actions the section's slot entry injects. */
@@ -180,6 +200,7 @@ export interface SettingsActions {
   setSource(source: Source): void
   setRoute(provider: string, model: string, effort: string): void
   setEffort(effort: string): void
+  setMaxQuestions(text: string): void
   refreshCatalog(): void
 }
 
@@ -291,6 +312,20 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
           ? React.createElement('p', { className: 'dip-set-error' }, t('settingsPickModelRequired'))
           : null)
       : null,
+    row(t('settingsMaxQuestions'), t('settingsMaxQuestionsHint'),
+      React.createElement('input', {
+        className: 'dip-set-number',
+        type: 'number',
+        min: MIN_QUESTIONS,
+        step: 1,
+        inputMode: 'numeric',
+        'aria-label': t('settingsMaxQuestions'),
+        placeholder: String(DEFAULT_MAX_QUESTIONS),
+        value: state.maxQuestions,
+        disabled,
+        'aria-invalid': state.maxQuestions !== '' && !validQuestionCap(state.maxQuestions),
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => { props.setMaxQuestions(event.target.value) },
+      })),
     )
   }
 }

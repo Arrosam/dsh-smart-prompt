@@ -16,7 +16,8 @@ import { collectTurns, formatHistoryBlock } from './history.js'
 import { callModel, NoRouteError, resolveRoute, type CallFailure, type LlmFace, type Route } from './llm-call.js'
 import { budgetFor, charLength, formatRatio, lengthVerdict } from './length-gate.js'
 import { normalizeOutput } from './normalize.js'
-import { buildSystemPrompt, buildUserMessage } from './prompts.js'
+import { answersPrompt, buildSystemPrompt, buildUserMessage, questionsPrompt } from './prompts.js'
+import { answeredQuestions, formatAnswers, parseRewrite, questionId, type SeamAnswer } from './questions.js'
 import { contextTrigger } from './context-trigger.js'
 
 /** Stable error codes the client maps to localized copy. */
@@ -44,6 +45,8 @@ export interface ImproveMeta {
   anchors: { total: number; kept: number; reinjected: number }
   note: string
   contextUsed: string
+  /** Follow-up questions asked about missing information, and how many the user answered. */
+  questions: { asked: number; answered: number }
 }
 
 /** Success payload. */
@@ -58,6 +61,15 @@ export interface SessionsFace {
   get(id: string): { deriveMessages?: () => unknown } | undefined
 }
 
+/** One question for the host's ask-user seam: free text, no options. */
+export interface FollowUpQuestion { readonly id: string; readonly question: string; readonly header: string }
+
+/** Asks the user; rejects when the question is cancelled or no answer UI accepts it. */
+export type AskUser = (questions: readonly FollowUpQuestion[], signal: AbortSignal) => Promise<SeamAnswer>
+
+/** Heading shown on each follow-up question. */
+const QUESTION_HEADER = 'Smart prompt'
+
 /** Everything the orchestrator needs from the host. */
 export interface ImproveDeps {
   readonly llm: LlmFace | undefined
@@ -70,6 +82,11 @@ export interface ImproveDeps {
   /** Route captured from the live `llm/stream` waterfall, when one has been seen. */
   readonly lastRoute?: Route | null
   readonly sessions?: SessionsFace | undefined
+  /**
+   * The ask-user seam bound to the request's conversation, or undefined when the user
+   * cannot be asked there. Without it the model is not asked for questions at all.
+   */
+  readonly askUser?: ((sessionId: string) => AskUser | undefined) | undefined
 }
 
 /** One request. */
@@ -78,6 +95,8 @@ export interface ImproveInput {
   readonly sessionId: string
   readonly mode: Mode
   readonly signal: AbortSignal
+  /** Most follow-up questions to ask; 0 asks none. */
+  readonly maxQuestions?: number
 }
 
 function failureOf(failure: CallFailure, cfg: ResolvedConfig): ImproveErr {
@@ -98,8 +117,9 @@ function failureOf(failure: CallFailure, cfg: ResolvedConfig): ImproveErr {
 /**
  * Run one enhancement end to end.
  *
- * Call budget: one generation call, plus at most ONE repair call when a gate
- * complains. Never a pipeline.
+ * Call budget: one generation call; one more when the user answered follow-up
+ * questions about missing information; plus at most ONE repair call when a gate
+ * complains.
  *
  * @param deps - host faces (model, route sources, sessions).
  * @param cfg - resolved configuration.
@@ -161,8 +181,11 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
     } catch { contextBlock = '' }
   }
 
-  const system = buildSystemPrompt(input.mode, cfg)
-  const anchors = cfg.fidelityGate ? extractAnchors(draft) : []
+  const maxQuestions = input.maxQuestions ?? 0
+  const ask = maxQuestions > 0 && input.sessionId !== '' && deps.askUser !== undefined ? deps.askUser(input.sessionId) : undefined
+  // Only invite questions when someone can answer them; otherwise the rewrite stays as before.
+  let system = buildSystemPrompt(input.mode, cfg, ask !== undefined ? [questionsPrompt(maxQuestions)] : [])
+  let anchors = cfg.fidelityGate ? extractAnchors(draft) : []
   const maxRatio = maxRatioFor(cfg, input.mode)
 
   const first = await callModel(deps.llm, {
@@ -171,12 +194,46 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
   })
   if (!first.ok) return failureOf(first.failure, cfg)
 
-  let enhanced = normalizeOutput(first.text)
+  const parsed = parseRewrite(first.text, ask !== undefined ? maxQuestions : 0)
+  let enhanced = normalizeOutput(parsed.text)
   if (enhanced === '') return { ok: false, code: ERR.EMPTY_OUTPUT, message: '模型没有返回可用内容，原文未改动' }
+
+  // ---- follow-up questions: ask, then rewrite once more with the answers ----
+  let answersBlock = ''
+  let answeredCount = 0
+  // The length budget covers what the user supplied: the draft plus their answers.
+  let lengthBase = draft
+  if (ask !== undefined && parsed.questions.length > 0) {
+    let reply: SeamAnswer | undefined
+    try {
+      reply = await ask(parsed.questions.map((question, index) => ({ id: questionId(index), question, header: QUESTION_HEADER })), input.signal)
+    } catch {
+      // Closed or unanswerable: keep the first rewrite with its (TBD: ...) notes.
+      reply = undefined
+    }
+    if (input.signal.aborted) return { ok: false, code: ERR.ABORTED, message: '已取消' }
+    const answered = reply !== undefined ? answeredQuestions(parsed.questions, reply) : []
+    if (answered.length > 0) {
+      answersBlock = formatAnswers(answered)
+      answeredCount = answered.length
+      const answerText = answered.map((a) => a.answer).join('\n')
+      lengthBase = draft + '\n' + answerText
+      if (cfg.fidelityGate) anchors = extractAnchors(lengthBase)
+      system = buildSystemPrompt(input.mode, cfg, [answersPrompt()])
+      const second = await callModel(deps.llm, {
+        route, system, config: cfg, signal: input.signal,
+        userMessage: buildUserMessage(draft, contextBlock, '', answersBlock),
+      })
+      if (!second.ok) return failureOf(second.failure, cfg)
+      const folded = normalizeOutput(parseRewrite(second.text, 0).text)
+      if (folded === '') return { ok: false, code: ERR.EMPTY_OUTPUT, message: '模型没有返回可用内容，原文未改动' }
+      enhanced = folded
+    }
+  }
 
   // ---- gates ----
   let fidelity = checkFidelity(anchors, enhanced)
-  const verdict = cfg.lengthGate ? lengthVerdict(draft, enhanced, maxRatio) : { kind: 'ok' as const, ratio: 1 }
+  const verdict = cfg.lengthGate ? lengthVerdict(lengthBase, enhanced, maxRatio) : { kind: 'ok' as const, ratio: 1 }
 
   if ((fidelity.missing.length > 0 || verdict.kind === 'converge') && !input.signal.aborted) {
     const clauses: string[] = []
@@ -189,10 +246,10 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
 
     const repair = await callModel(deps.llm, {
       route, system, config: cfg, signal: input.signal,
-      userMessage: buildUserMessage(draft, contextBlock, clauses.join('\n')),
+      userMessage: buildUserMessage(draft, contextBlock, clauses.join('\n'), answersBlock),
     })
     if (repair.ok) {
-      const repaired = normalizeOutput(repair.text)
+      const repaired = normalizeOutput(parseRewrite(repair.text, 0).text)
       if (repaired !== '') {
         enhanced = repaired
         fidelity = checkFidelity(anchors, enhanced)
@@ -212,8 +269,8 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
   }
 
   // ---- final length judgement: a re-appended fact outranks the ceiling ----
-  const finalRatio = charLength(draft) === 0 ? 0 : charLength(enhanced) / charLength(draft)
-  const finalBudget = budgetFor(draft, maxRatio)
+  const finalRatio = charLength(lengthBase) === 0 ? 0 : charLength(enhanced) / charLength(lengthBase)
+  const finalBudget = budgetFor(lengthBase, maxRatio)
   if (cfg.lengthGate && reinjected === 0 && charLength(enhanced) > finalBudget) {
     return {
       ok: false,
@@ -237,6 +294,7 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
       anchors: { total: fidelity.total, kept: fidelity.kept, reinjected },
       note: reinjected > 0 ? fidelityNote(fidelity.missing) : '',
       contextUsed: contextBlock !== '' ? trigger.reason : 'none',
+      questions: { asked: parsed.questions.length, answered: answeredCount },
     },
   }
 }

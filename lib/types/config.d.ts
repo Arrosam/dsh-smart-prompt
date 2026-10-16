@@ -17,7 +17,11 @@ export interface LiveSettings {
     readonly model: string;
     /** Effort for the dedicated model; empty sends none (adapter default). */
     readonly reasoningEffort: string;
+    /** Most follow-up questions one refinement may ask about missing information. */
+    readonly maxQuestions: number;
 }
+/** Default cap on follow-up questions per refinement (user-chosen). */
+export declare const DEFAULT_MAX_QUESTIONS = 5;
 /** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
 export declare const MODE_VALUES: readonly ["standard", "light"];
 export declare const MODEL_SOURCE_VALUES: readonly ["conversation", "dedicated"];
@@ -60,6 +64,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     provider: z<string, string, "volatile-defined">;
     model: z<string, string, "volatile-defined">;
     dedicatedReasoningEffort: z<string, string, "volatile-defined">;
+    maxQuestions: z<number, number, "volatile-defined">;
     reasoningEffort: z<string, string, "defined">;
     logFailures: z<boolean, boolean, "defined">;
 }>>, Schemastery.ObjectT<NoInfer<{
@@ -80,6 +85,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     provider: z<string, string, "volatile-defined">;
     model: z<string, string, "volatile-defined">;
     dedicatedReasoningEffort: z<string, string, "volatile-defined">;
+    maxQuestions: z<number, number, "volatile-defined">;
     reasoningEffort: z<string, string, "defined">;
     logFailures: z<boolean, boolean, "defined">;
 }>>, "plain">;

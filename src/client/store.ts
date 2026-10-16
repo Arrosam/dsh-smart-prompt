@@ -24,6 +24,8 @@ export interface Meta {
   anchors: { total: number; kept: number; reinjected: number }
   note: string
   contextUsed: string
+  /** Follow-up questions; absent from hosts older than this client. */
+  questions?: { asked: number; answered: number }
 }
 
 /** Per-session state. */

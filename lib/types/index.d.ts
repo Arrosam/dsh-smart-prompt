@@ -12,7 +12,9 @@
  * - **length gate** — refuses to let a one-line request become a specification,
  *   matching WorkBuddy's own "less filler, fewer tokens" positioning.
  *
- * At most TWO model calls per click (one generation + one repair), never a pipeline.
+ * When the rewrite finds information missing, the user is asked short follow-up
+ * questions through the host's ask-user seam and the draft is rewritten once more
+ * with the answers. At most three model calls per click (generation, answers, repair).
  *
  * @module dsh-smart-prompt
  */

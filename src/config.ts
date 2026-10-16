@@ -23,7 +23,12 @@ export interface LiveSettings {
   readonly model: string
   /** Effort for the dedicated model; empty sends none (adapter default). */
   readonly reasoningEffort: string
+  /** Most follow-up questions one refinement may ask about missing information. */
+  readonly maxQuestions: number
 }
+
+/** Default cap on follow-up questions per refinement (user-chosen). */
+export const DEFAULT_MAX_QUESTIONS = 5
 
 /** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
 export const MODE_VALUES = ['standard', 'light'] as const
@@ -69,6 +74,7 @@ export const Config = z.object({
   provider: z.string().default('').volatile(),
   model: z.string().default('').volatile(),
   dedicatedReasoningEffort: z.string().default('').volatile(),
+  maxQuestions: z.natural().min(1).default(DEFAULT_MAX_QUESTIONS).volatile(),
   // 'low' by default: a rewrite is a shallow task, and reasoning models at the
   // agent's default effort (often max) can burn minutes or exhaust a small token
   // budget on thinking before any answer text arrives.
@@ -98,11 +104,16 @@ export function readLiveSettings(raw: unknown): LiveSettings {
     provider: text(live(c.provider)),
     model: text(live(c.model)),
     reasoningEffort: text(live(c.dedicatedReasoningEffort)),
+    maxQuestions: wholeAtLeastOne(live(c.maxQuestions), DEFAULT_MAX_QUESTIONS),
   }
 }
 
 function pickMode(value: unknown, fallback: Mode): Mode {
   return value === 'light' || value === 'standard' ? value : fallback
+}
+
+function wholeAtLeastOne(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : fallback
 }
 
 function positive(value: unknown, fallback: number): number {

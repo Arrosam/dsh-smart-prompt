@@ -72,8 +72,10 @@ export const css = [
   '.dip-set-control{flex:none}',
   '.dip-set-dedicated{display:grid;gap:10px;padding:0 0 12px}',
   '.dip-set-field{display:grid;gap:4px}',
-  '.dip-set-select{height:32px;padding:0 8px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);',
+  '.dip-set-select,.dip-set-number{height:32px;padding:0 8px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);',
   'background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-md)}',
+  '.dip-set-number{width:72px}',
+  '.dip-set-number[aria-invalid="true"]{border-color:var(--dsw-alias-state-error-primary)}',
   '.dip-set-error{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}',
   '.dip-set-link{padding:0;border:0;background:0 0;font:inherit;color:var(--dsw-alias-state-business-primary);cursor:pointer}',
 

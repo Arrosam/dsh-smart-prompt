@@ -82,6 +82,7 @@ function loadPrimitives(): Primitives | undefined {
     const mod = typeof require === 'function' ? require(PRIMITIVES_MODULE) as Partial<Primitives> | undefined : undefined
     return mod !== undefined && typeof mod.SettingsFormModel === 'function' && typeof mod.SettingsForm === 'function'
       && typeof mod.SegmentedControl === 'function' && typeof mod.settingsTextField === 'function'
+      && typeof mod.settingsNumberField === 'function'
       ? mod as Primitives
       : undefined
   } catch {

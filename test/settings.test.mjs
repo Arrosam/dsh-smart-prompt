@@ -7,7 +7,7 @@ import { improveDraft } from '../lib/orchestrate.js'
 // The plugin settings page (DSH 0.2+) edits only `.volatile()` Config fields.
 test('the settings-page fields are volatile, everything else stays file-only', () => {
   const resolved = Config({})
-  for (const field of ['defaultMode', 'modelSource', 'provider', 'model', 'dedicatedReasoningEffort']) {
+  for (const field of ['defaultMode', 'modelSource', 'provider', 'model', 'dedicatedReasoningEffort', 'maxQuestions']) {
     assert.equal(typeof resolved[field]?.get, 'function', field + ' is a live settings field')
   }
   assert.equal(typeof resolved.timeoutMs, 'number', 'tuning fields are not on the settings page')
@@ -15,7 +15,7 @@ test('the settings-page fields are volatile, everything else stays file-only', (
 
 test('settings defaults: standard mode, conversation model, no dedicated route', () => {
   assert.deepEqual(readLiveSettings(Config({})), {
-    mode: 'standard', modelSource: 'conversation', provider: '', model: '', reasoningEffort: '',
+    mode: 'standard', modelSource: 'conversation', provider: '', model: '', reasoningEffort: '', maxQuestions: 5,
   })
 })
 
@@ -30,6 +30,8 @@ test('a saved setting is read at call time, not frozen at apply', () => {
 test('the schema rejects modes and sources outside the closed sets', () => {
   assert.throws(() => Config({ defaultMode: 'turbo' }))
   assert.throws(() => Config({ modelSource: 'random' }))
+  assert.throws(() => Config({ maxQuestions: 0 }), 'at least one question')
+  assert.throws(() => Config({ maxQuestions: 2.5 }), 'whole numbers only')
 })
 
 test('resolveConfig still accepts plain (pre-0.2) values', () => {

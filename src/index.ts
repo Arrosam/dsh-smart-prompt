@@ -12,14 +12,16 @@
  * - **length gate** — refuses to let a one-line request become a specification,
  *   matching WorkBuddy's own "less filler, fewer tokens" positioning.
  *
- * At most TWO model calls per click (one generation + one repair), never a pipeline.
+ * When the rewrite finds information missing, the user is asked short follow-up
+ * questions through the host's ask-user seam and the draft is rewritten once more
+ * with the answers. At most three model calls per click (generation, answers, repair).
  *
  * @module dsh-smart-prompt
  */
 
 import z from '@deepseek-ai/schemastery'
 import { readLiveSettings, resolveConfig, type Mode, type ResolvedConfig } from './config.js'
-import { improveDraft, ERR, type ImproveDeps, type SessionsFace } from './orchestrate.js'
+import { improveDraft, ERR, type AskUser, type ImproveDeps, type SessionsFace } from './orchestrate.js'
 import type { LlmFace, Route } from './llm-call.js'
 
 /**
@@ -126,6 +128,22 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
     }
   }
 
+  // The conversation's ask-user seam (`@deepseek-ai/dsh-user-questions`). The Web
+  // question card answers only requests scoped to a live root agent, and the seam
+  // rejects any other agent, so without one the user is not asked at all.
+  const askUser = (sessionId: string): AskUser | undefined => {
+    const questions = service('userQuestions') as { ask?: (request: unknown) => Promise<unknown> } | undefined
+    const agents = service('agents') as { get?: (id: string) => unknown; roots?: () => unknown[] } | undefined
+    if (typeof questions?.ask !== 'function' || typeof agents?.get !== 'function' || typeof agents.roots !== 'function') return undefined
+    try {
+      const agent = agents.get(sessionId)
+      if (agent === undefined || !agents.roots().includes(agent)) return undefined
+      return async (items, signal) => (await questions.ask!({ questions: items, agent, signal })) as Awaited<ReturnType<AskUser>>
+    } catch {
+      return undefined
+    }
+  }
+
   const deps = (): ImproveDeps => {
     const defaults = service('agentDefaultModel') as { currentSelection?: () => unknown } | undefined
     const settings = readLiveSettings(rawConfig)
@@ -140,6 +158,7 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
         : undefined,
       lastRoute,
       sessions: service('sessions') as SessionsFace | undefined,
+      askUser,
     }
   }
 
@@ -191,7 +210,8 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
 
       const started = Date.now()
       try {
-        const result = await improveDraft(deps(), config, { draft, sessionId, mode, signal: controller.signal })
+        const maxQuestions = readLiveSettings(rawConfig).maxQuestions
+        const result = await improveDraft(deps(), config, { draft, sessionId, mode, signal: controller.signal, maxQuestions })
         if (clientGone) return
         // Every refusal is observable: the handled failure payloads below used to
         // return silently, leaving nothing in the host log to diagnose with.

@@ -9,6 +9,7 @@
  */
 import { type Mode, type ResolvedConfig } from './config.js';
 import { type LlmFace, type Route } from './llm-call.js';
+import { type SeamAnswer } from './questions.js';
 /** Stable error codes the client maps to localized copy. */
 export declare const ERR: {
     readonly EMPTY: "EMPTY";
@@ -37,6 +38,11 @@ export interface ImproveMeta {
     };
     note: string;
     contextUsed: string;
+    /** Follow-up questions asked about missing information, and how many the user answered. */
+    questions: {
+        asked: number;
+        answered: number;
+    };
 }
 /** Success payload. */
 export interface ImproveOk {
@@ -58,6 +64,14 @@ export interface SessionsFace {
         deriveMessages?: () => unknown;
     } | undefined;
 }
+/** One question for the host's ask-user seam: free text, no options. */
+export interface FollowUpQuestion {
+    readonly id: string;
+    readonly question: string;
+    readonly header: string;
+}
+/** Asks the user; rejects when the question is cancelled or no answer UI accepts it. */
+export type AskUser = (questions: readonly FollowUpQuestion[], signal: AbortSignal) => Promise<SeamAnswer>;
 /** Everything the orchestrator needs from the host. */
 export interface ImproveDeps {
     readonly llm: LlmFace | undefined;
@@ -80,6 +94,11 @@ export interface ImproveDeps {
     /** Route captured from the live `llm/stream` waterfall, when one has been seen. */
     readonly lastRoute?: Route | null;
     readonly sessions?: SessionsFace | undefined;
+    /**
+     * The ask-user seam bound to the request's conversation, or undefined when the user
+     * cannot be asked there. Without it the model is not asked for questions at all.
+     */
+    readonly askUser?: ((sessionId: string) => AskUser | undefined) | undefined;
 }
 /** One request. */
 export interface ImproveInput {
@@ -87,12 +106,15 @@ export interface ImproveInput {
     readonly sessionId: string;
     readonly mode: Mode;
     readonly signal: AbortSignal;
+    /** Most follow-up questions to ask; 0 asks none. */
+    readonly maxQuestions?: number;
 }
 /**
  * Run one enhancement end to end.
  *
- * Call budget: one generation call, plus at most ONE repair call when a gate
- * complains. Never a pipeline.
+ * Call budget: one generation call; one more when the user answered follow-up
+ * questions about missing information; plus at most ONE repair call when a gate
+ * complains.
  *
  * @param deps - host faces (model, route sources, sessions).
  * @param cfg - resolved configuration.
