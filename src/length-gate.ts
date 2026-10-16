@@ -19,7 +19,7 @@
  * (deliverable + constraints + acceptance) rather than being refused its own
  * improvement.
  */
-export const MIN_BUDGET_CHARS = 200
+export const MIN_BUDGET_CHARS = 600
 
 /** Verdict of one length measurement. */
 export type LengthVerdict =
@@ -52,12 +52,12 @@ export function ratioOf(original: string, enhanced: string): number {
  * The character budget a rewrite of this draft is allowed.
  *
  * @param original - the user's draft.
- * @param maxRatio - ceiling for the active mode.
- * @returns max({@link MIN_BUDGET_CHARS}, draft length x ratio).
+ * @param maxRatio - ceiling for the active mode; 0 (or less) means uncapped.
+ * @returns max({@link MIN_BUDGET_CHARS}, draft length x ratio), or Infinity when uncapped.
  */
 export function budgetFor(original: string, maxRatio: number): number {
-  const scaled = maxRatio > 0 ? Math.floor(charLength(original) * maxRatio) : 0
-  return Math.max(MIN_BUDGET_CHARS, scaled)
+  if (!(maxRatio > 0)) return Number.POSITIVE_INFINITY
+  return Math.max(MIN_BUDGET_CHARS, Math.floor(charLength(original) * maxRatio))
 }
 
 /**

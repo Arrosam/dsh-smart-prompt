@@ -30,6 +30,14 @@ export interface LiveSettings {
 /** Default cap on follow-up questions per refinement (user-chosen). */
 export const DEFAULT_MAX_QUESTIONS = 5
 
+/** Light-mode length ceiling: the rewrite may reach this multiple of the draft. */
+export const DEFAULT_LIGHT_MAX_RATIO = 2
+/**
+ * Standard-mode length ceiling. 0 = uncapped (user decision): restructuring a draft
+ * that needed follow-up answers was refused too often; set a positive ratio to cap it.
+ */
+export const DEFAULT_STANDARD_MAX_RATIO = 0
+
 /** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
 export const MODE_VALUES = ['standard', 'light'] as const
 export const MODEL_SOURCE_VALUES = ['conversation', 'dedicated'] as const
@@ -59,8 +67,8 @@ export interface ResolvedConfig {
 export const Config = z.object({
   defaultMode: z.union(MODE_VALUES).default('standard').volatile(),
   modelSource: z.union(MODEL_SOURCE_VALUES).default('conversation').volatile(),
-  lightMaxRatio: z.number().default(1.2),
-  standardMaxRatio: z.number().default(2.5),
+  lightMaxRatio: z.number().default(DEFAULT_LIGHT_MAX_RATIO),
+  standardMaxRatio: z.number().default(DEFAULT_STANDARD_MAX_RATIO),
   acceptanceCriteria: z.boolean().default(false),
   temperature: z.number().default(0.3),
   maxTokens: z.number().default(8192),
@@ -144,8 +152,8 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
   const c = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   return {
     defaultMode: pickMode(live(c.defaultMode), 'standard'),
-    lightMaxRatio: positive(c.lightMaxRatio, 1.2),
-    standardMaxRatio: positive(c.standardMaxRatio, 2.5),
+    lightMaxRatio: nonNegative(c.lightMaxRatio, DEFAULT_LIGHT_MAX_RATIO),
+    standardMaxRatio: nonNegative(c.standardMaxRatio, DEFAULT_STANDARD_MAX_RATIO),
     acceptanceCriteria: flag(c.acceptanceCriteria, false),
     temperature: nonNegative(c.temperature, 0.3),
     maxTokens: positive(c.maxTokens, 8192),

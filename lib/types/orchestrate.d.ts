@@ -10,6 +10,7 @@
 import { type Mode, type ResolvedConfig } from './config.js';
 import { type LlmFace, type Route } from './llm-call.js';
 import { type SeamAnswer } from './questions.js';
+import type { AnswerMemory } from './answer-memory.js';
 /** Stable error codes the client maps to localized copy. */
 export declare const ERR: {
     readonly EMPTY: "EMPTY";
@@ -99,6 +100,8 @@ export interface ImproveDeps {
      * cannot be asked there. Without it the model is not asked for questions at all.
      */
     readonly askUser?: ((sessionId: string) => AskUser | undefined) | undefined;
+    /** Answers kept across a failed refinement, so retrying the same draft does not ask again. */
+    readonly answers?: AnswerMemory | undefined;
 }
 /** One request. */
 export interface ImproveInput {

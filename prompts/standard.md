@@ -19,5 +19,3 @@ Rules:
 - Every added line must be traceable to something the draft states or plainly implies.
 - Put anything you could not determine into a short explicit "(TBD: ...)" note instead of
   inventing it, and keep such notes to what genuinely blocks work.
-
-Target length: at most about 2.5x the draft.

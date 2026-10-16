@@ -32,7 +32,9 @@ test('a short draft is governed by the absolute floor, not the ratio', () => {
   assert.equal(budgetFor(draft, 2.5), MIN_BUDGET_CHARS)
   assert.equal(lengthVerdict(draft, 'x'.repeat(150), 2.5).kind, 'ok')
   assert.equal(overBudget(draft, 'x'.repeat(150), 2.5), false)
-  assert.equal(overBudget(draft, 'x'.repeat(250), 2.5), true)
+  // BVA on the 600-char floor: exactly at the floor passes, one over is refused.
+  assert.equal(overBudget(draft, 'x'.repeat(600), 2.5), false)
+  assert.equal(overBudget(draft, 'x'.repeat(601), 2.5), true)
 })
 
 test('the floor never loosens a long draft', () => {

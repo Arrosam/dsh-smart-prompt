@@ -62,6 +62,12 @@ export const css = [
   '.dip-bar[data-kind="error"]{border-color:rgba(220,90,70,.5);color:var(--dsw-alias-label-primary)}',
   '.dip-bar-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
   '.dip-sep{opacity:.4}',
+  // Retry on the failure bubble: a compact pill in the same tokens as the composer capsule.
+  '.dip-bar-retry{display:inline-flex;align-items:center;gap:4px;flex:none;height:22px;padding:0 8px;box-sizing:border-box;',
+  'border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);',
+  'font:inherit;font-size:12px;line-height:1;white-space:nowrap;cursor:pointer;outline:none;transition:background-color .15s,color .15s}',
+  '.dip-bar-retry:hover{background:' + HOVER_BG + ';color:var(--dsw-alias-label-primary)}',
+  '.dip-bar-retry:focus-visible{box-shadow:' + FOCUS_RING + '}',
 
   /* ---------- settings section (Plugins page), host tokens only ---------- */
   '.dip-set-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:12px 0}',
@@ -86,6 +92,6 @@ export const css = [
 
   /* ---------- motion preferences ---------- */
   '@media (prefers-reduced-motion: reduce){',
-  '.dip-icon,.dip-btn,.dip-revert,.dip-retry,.dip-bar{animation:none!important;transition-duration:.01ms!important}',
+  '.dip-icon,.dip-btn,.dip-revert,.dip-retry,.dip-bar,.dip-bar-retry{animation:none!important;transition-duration:.01ms!important}',
   '}',
 ].join('\n')

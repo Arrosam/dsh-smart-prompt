@@ -23,6 +23,7 @@ import z from '@deepseek-ai/schemastery'
 import { readLiveSettings, resolveConfig, type Mode, type ResolvedConfig } from './config.js'
 import { improveDraft, ERR, type AskUser, type ImproveDeps, type SessionsFace } from './orchestrate.js'
 import type { LlmFace, Route } from './llm-call.js'
+import { AnswerMemory } from './answer-memory.js'
 
 /**
  * The slice of the Cordis host context this plugin touches.
@@ -144,6 +145,9 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
     }
   }
 
+  // One per plugin instance: answers outlive a failed request so its retry does not ask again.
+  const answers = new AnswerMemory()
+
   const deps = (): ImproveDeps => {
     const defaults = service('agentDefaultModel') as { currentSelection?: () => unknown } | undefined
     const settings = readLiveSettings(rawConfig)
@@ -159,6 +163,7 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
       lastRoute,
       sessions: service('sessions') as SessionsFace | undefined,
       askUser,
+      answers,
     }
   }
 

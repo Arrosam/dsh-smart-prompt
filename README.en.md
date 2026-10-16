@@ -36,9 +36,9 @@ dsh plugin --profile web remove dsh-smart-prompt   # uninstall
 - **One-click replace** — **click** ✦ and 1–3 seconds later the draft is **replaced** with a sharper, agent-ready prompt. No preview dialog, no interruption.
 - **One-click undo** — **restore** the original within 8 seconds; the moment you edit by hand the undo bar disappears, so your new input is never overwritten.
 - **Fidelity gate (the real difference)** — it mechanically **extracts** the draft's hard facts (file paths, file names, identifiers, numbers and versions, URLs, `backticked` code, @references) and **verifies** each one literally survived the rewrite. A missing fact triggers one repair call naming those exact strings; if the model still drops it, a deterministic **re-append** adds a "Preserved original details" block — zero loss. Every other enhancer in the ecosystem just asks the model to "preserve the original details"; none of them checks.
-- **Length gate** — a rewrite over budget (2.5x in Standard, **never below a 200-character absolute floor**) gets one convergence call carrying an explicit character budget; if it is still over, nothing is written back and the reason is shown.
+- **Length gate** — a rewrite over budget (2x in Light, **never below a 600-character absolute floor**; Standard is uncapped by default) gets one convergence call carrying an explicit character budget; if it is still over, nothing is written back and the reason is shown.
 - **Quality certificate** — the status bar **shows** `Improved · fidelity 5/5 · 1.0x · 2.2s`: trust at a glance.
-- **Two modes** — **Light** (≤1.2x, de-filler and disambiguate) / **Standard** (≤2.5x, restructure); the mode is remembered locally, and the **⇄** zone on the chip switches instantly.
+- **Two modes** — **Light** (≤2x, de-filler and disambiguate) / **Standard** (no length cap by default, restructure); the mode is remembered locally, and the **⇄** zone on the chip switches instantly.
 - **Slash commands supported** — with `/bugfix <body>` the command prefix is **kept verbatim** and only the body is rewritten; the button is disabled only when a command has no body yet.
 - **Cancellable** — **click** ✦ again while it runs to genuinely **abort** the upstream request (`AbortSignal`); the draft stays untouched.
 - **Failure keeps your draft** — no model, timeout, empty output, network error: your input is **never touched**, you just get one readable message.
@@ -46,7 +46,7 @@ dsh plugin --profile web remove dsh-smart-prompt   # uninstall
 - **Zero-config out of the box** — no API key required; every optional setting has a default (see *Advanced usage*).
 - **Prompt templates are overridable** — all behaviour lives in `prompts/*.md`; drop same-named files into `$DSH_HOME/dsh-smart-prompt/prompts/` to **replace** the discipline layer and mode templates without touching code.
 - **Local HTTP surface** — `POST /dsh-smart-prompt/api/improve` **exposes** the same pipeline to your scripts and tools (loopback only).
-- **Short-draft protection** — the budget is `max(200, length × ratio)`, so a three-line draft is never killed by the ratio (a real flaw found in live testing, locked down by four tests).
+- **Short-draft protection** — the budget is `max(600, length × ratio)`, so a three-line draft is never killed by the ratio (a real flaw found in live testing, locked down by four tests).
 
 ### How it differs from the five existing enhancers
 
@@ -156,7 +156,7 @@ Worst case **5.43:1** (disabled label; WCAG AA wants >= 4.5:1) — the caret is 
 7. **A slash command with a long body** — `/bugfix <a rambling account>`: the prefix survives verbatim and only the body becomes a clearly structured investigation request; command parsing is unaffected.
 8. **Script and tool integration** — `POST /dsh-smart-prompt/api/improve` wires the same pipeline into your own scripts, CI or editor tooling, loopback only.
 9. **Mixed Chinese-English drafts** — English paths, function names and versions inside Chinese prose: the fidelity gate treats them as hard facts and keeps them verbatim; no translation pass eats your identifiers.
-10. **Long drafts afraid of bloat** — a colloquial wall of text in Standard mode: restructuring is capped at 2.5x, over-budget results get one convergence call, and anything still over is refused instead of silently becoming a thirty-line spec.
+10. **Long drafts afraid of bloat** — a colloquial wall of text in Standard mode: set `standardMaxRatio` to cap restructuring (uncapped by default); over-budget results get one convergence call, and anything still over is refused instead of silently becoming a thirty-line spec.
 11. **Paste the error verbatim** — drop a whole stack trace or validation log into the draft: class names, paths and versions are kept as hard facts while your ask is rewritten into one executable investigation request.
 
 ## What you will see
@@ -309,7 +309,7 @@ Everything below was actually run before publishing:
 
 **The status bar says "re-appended …"?** The model dropped a hard fact twice, so the plugin put it back deterministically at the end. Nothing was lost; the cost is a small extra block.
 
-**Why can a short draft grow several times over?** For short drafts the length gate uses a 200-character absolute budget instead of a ratio — otherwise it would refuse the three-line structure they need most.
+**Why can a short draft grow several times over?** For short drafts the length gate uses a 600-character absolute budget instead of a ratio — otherwise it would refuse the three-line structure they need most.
 
 **Was session context used?** The status bar shows `context used` when it was. By default it is attached only for anaphoric or very short drafts; `contextTurns: 0` disables it entirely.
 

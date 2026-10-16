@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+
+- **Retry on failure**: the error bubble has a **Retry** button that sends the same draft again. Answers you gave to follow-up questions are kept for that draft, so a retry does not open the question card again. They are dropped once a refinement succeeds.
+- **Longer prompts**: Standard mode no longer has a length cap (`standardMaxRatio` now defaults to `0`, meaning no cap). Light mode allows 2× the draft (was 1.2×), and the minimum length budget is 600 characters (was 200).
+
 ## 0.9.1
 
 - **Fix**: the settings section could be missing from the Plugins page. DSH starts browser plugins in no fixed order, and when this plugin started before DSH's settings service, it skipped the section until the next restart. It now waits for the service.

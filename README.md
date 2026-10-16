@@ -43,13 +43,14 @@ If the draft is missing something only you can answer (which endpoint, what limi
 
 - Answer "I don't know" and the prompt tells the agent to find it out itself, or to suggest options and carry on with the most reasonable one.
 - Skip a question or close the card, and you get the first rewrite with `(TBD: …)` notes for the gaps.
+- If the request fails after you answered, click **Retry** on the error bubble. Your answers are reused, so you are not asked again.
 - No questions are asked when the draft already has what it needs.
 
 ## What it guarantees
 
 - **Nothing important is lost.** Before rewriting, the plugin lists the hard facts in your draft: file paths, identifiers, numbers and versions, URLs, `code`, and @mentions. It then checks that each one survived. If the model dropped one, it gets one more try. If a fact is still missing, it is added back at the end under "Preserved original details".
 - **Nothing is invented.** A vague draft is not padded with made-up requirements. Gaps are marked `(TBD: …)` instead.
-- **No runaway length.** A rewrite may grow to 2.5× the draft in Standard mode, or 1.2× in Light mode, and always at least 200 characters. A longer result gets one chance to shorten. If it is still too long, it is discarded and your draft is kept.
+- **No runaway length in Light mode.** A Light rewrite may grow to 2× the draft, and always at least 600 characters. A longer result gets one chance to shorten. If it is still too long, it is discarded and your draft is kept. Standard mode has no length cap by default (set `standardMaxRatio` to add one).
 - **At most three model calls per click**: the rewrite, a second rewrite with your answers (only when you answered follow-up questions), and one repair.
 
 ## Settings
@@ -76,8 +77,8 @@ Other options live in the profile's `cordis.patch.yml`. All are optional; the va
 - insert:
     - id: dsh-smart-prompt
       config:
-        lightMaxRatio: 1.2
-        standardMaxRatio: 2.5
+        lightMaxRatio: 2
+        standardMaxRatio: 0        # 0 = no length cap
         acceptanceCriteria: false  # Standard: add a checkable "done when" line
         temperature: 0.3
         maxTokens: 8192

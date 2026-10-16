@@ -51,7 +51,8 @@ test('a command with no body is refused with the accurate code and copy', async 
 })
 
 test('the length gate measures the body, not the command prefix', async () => {
-  // body is 25 chars; ceiling is max(200, 25*2.5) = 200, so a 150-char rewrite passes
+  // body is 16 chars; standard mode is uncapped by default (and even a 2.5x cap would
+  // give max(600, 16*2.5) = 600), so a 150-char rewrite passes
   const llm = stubLlm([{ text: 'x'.repeat(150) }])
   const out = await improveDraft(deps(llm), CFG, call('/bugfix 把登录接口改快一点顺便看看网络层'))
   assert.equal(out.ok, true)

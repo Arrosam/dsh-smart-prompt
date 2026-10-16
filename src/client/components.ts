@@ -315,13 +315,30 @@ export function StatusBar(props: { sessionId?: string; t: TFn }): React.ReactEle
     return () => { window.clearTimeout(timer) }
   }, [leaving])
 
+  // Retry resends the draft the failed request started from (kept as `backup`); the host
+  // still holds any follow-up answers given for it, so the question card is not shown again.
+  // The overlay anchor sits inside the composer card, whose own click handler (workspace
+  // trigger) must not also fire.
+  const onRetry = React.useCallback((event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (sessionId === undefined) return
+    const current = storeFor(sessionId)
+    if (current.phase !== 'error' || current.actions === null) return
+    runImprove(sessionId, current.backup, current.actions, t)
+  }, [sessionId, t])
+
   const visible = bubble ?? leaving
   if (visible === null) return null
+  const canRetry = visible.kind === 'error' && state !== null && state.actions !== null && splitCommand(state.backup).body !== ''
   return React.createElement('div', {
     className: 'dip-bar',
     'data-kind': visible.kind,
     'data-state': bubble === null ? 'leaving' : 'entering',
-  }, React.createElement('span', { className: 'dip-bar-text' }, visible.text))
-
+  },
+  React.createElement('span', { className: 'dip-bar-text' }, visible.text),
+  canRetry
+    ? React.createElement('button', { type: 'button', className: 'dip-bar-retry', title: t('retryFailedTitle'), onMouseDown: keepComposerFocus, onClick: onRetry }, CapsuleIcon('retry'), t('retry'))
+    : null,
+  )
 }
 

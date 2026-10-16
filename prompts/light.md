@@ -17,4 +17,4 @@ Do NOT:
 - Do not expand the request or add requirements.
 - Do not explain your changes.
 
-Target length: at most about 1.2x the draft.
+Target length: at most about 2x the draft.

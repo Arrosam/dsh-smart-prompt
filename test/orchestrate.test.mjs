@@ -4,6 +4,8 @@ import { resolveConfig } from '../lib/config.js'
 import { improveDraft } from '../lib/orchestrate.js'
 
 const CFG = resolveConfig({})
+// Standard mode is uncapped by default; length-gate tests opt into an explicit ceiling.
+const CAPPED = resolveConfig({ standardMaxRatio: 2.5 })
 
 /** Scripted model: each entry is one response; records every request it receives. */
 function stubLlm(script) {
@@ -112,11 +114,11 @@ test('an inflated rewrite is sent back once with an explicit character budget', 
     { text: 'x'.repeat(900) },
     { text: '请把 src/a.ts 中的 maxRatioFor 改为 2.5。' },
   ])
-  const out = await improveDraft(deps(llm), CFG, call())
+  const out = await improveDraft(deps(llm), CAPPED, call())
   assert.equal(out.ok, true)
   assert.equal(llm.calls.length, 2)
   // budget = max(MIN_BUDGET_CHARS, floor(draftChars * 2.5)) — the floor governs here
-  const budget = 200
+  const budget = 600
   assert.match(llm.calls[1].messages[0].content[0].text, /too long/)
   assert.match(llm.calls[1].messages[0].content[0].text, new RegExp('budget of ' + String(budget)))
 })
@@ -126,7 +128,7 @@ test('a rewrite that stays over the ceiling is refused and the draft kept', asyn
   // gate is the only thing deciding.
   const draft = '把这个模块重构一下做得更清晰一些，另外再看下有没有多余的东西'
   const llm = stubLlm([{ text: 'x'.repeat(900) }, { text: 'y'.repeat(900) }])
-  const out = await improveDraft(deps(llm), CFG, call({ draft }))
+  const out = await improveDraft(deps(llm), CAPPED, call({ draft }))
   assert.equal(out.ok, false)
   assert.equal(out.code, 'LENGTH_EXCEEDED')
   assert.equal(llm.calls.length, 2)
@@ -136,7 +138,7 @@ test('a re-appended hard fact outranks the length ceiling', async () => {
   // The repair pass fixes neither complaint: the fact is re-appended and the
   // result is long. Fidelity wins — the user is told how long it got.
   const llm = stubLlm([{ text: 'x'.repeat(900) }, { text: 'y'.repeat(900) }])
-  const out = await improveDraft(deps(llm), CFG, call())
+  const out = await improveDraft(deps(llm), CAPPED, call())
   assert.equal(out.ok, true)
   assert.equal(out.meta.anchors.reinjected, 3)
   assert.ok(out.meta.ratio > 2.5)
@@ -147,7 +149,7 @@ test('the repair call carries both complaints at once', async () => {
     { text: 'x'.repeat(900) },
     { text: '请把 src/a.ts 中的 maxRatioFor 改为 2.5。' },
   ])
-  await improveDraft(deps(llm), CFG, call())
+  await improveDraft(deps(llm), CAPPED, call())
   const body = llm.calls[1].messages[0].content[0].text
   assert.match(body, /too long/)
   assert.match(body, /DROPPED/)

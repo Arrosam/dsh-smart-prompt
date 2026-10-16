@@ -50,8 +50,8 @@ const FALLBACK_DISCIPLINE = [
 ].join('\n')
 
 const FALLBACK_MODES: Record<Mode, string> = {
-  light: 'Mode: light. Clean up filler, typos and redundancy. Do not restructure. At most ~1.2x the draft.',
-  standard: 'Mode: standard. Restate the request so an agent can execute it: deliverable, constraints, steps, format. Add nothing new. At most ~2.5x the draft.',
+  light: 'Mode: light. Clean up filler, typos and redundancy. Do not restructure. At most ~2x the draft.',
+  standard: 'Mode: standard. Restate the request so an agent can execute it: deliverable, constraints, steps, format. Add nothing new.',
 }
 
 /** The always-loaded discipline layer. */

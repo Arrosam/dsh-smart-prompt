@@ -19,6 +19,7 @@ import { normalizeOutput } from './normalize.js'
 import { answersPrompt, buildSystemPrompt, buildUserMessage, questionsPrompt } from './prompts.js'
 import { answeredQuestions, formatAnswers, parseRewrite, questionId, type SeamAnswer } from './questions.js'
 import { contextTrigger } from './context-trigger.js'
+import type { AnswerMemory } from './answer-memory.js'
 
 /** Stable error codes the client maps to localized copy. */
 export const ERR = {
@@ -87,6 +88,8 @@ export interface ImproveDeps {
    * cannot be asked there. Without it the model is not asked for questions at all.
    */
   readonly askUser?: ((sessionId: string) => AskUser | undefined) | undefined
+  /** Answers kept across a failed refinement, so retrying the same draft does not ask again. */
+  readonly answers?: AnswerMemory | undefined
 }
 
 /** One request. */
@@ -182,53 +185,68 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
   }
 
   const maxQuestions = input.maxQuestions ?? 0
-  const ask = maxQuestions > 0 && input.sessionId !== '' && deps.askUser !== undefined ? deps.askUser(input.sessionId) : undefined
-  // Only invite questions when someone can answer them; otherwise the rewrite stays as before.
-  let system = buildSystemPrompt(input.mode, cfg, ask !== undefined ? [questionsPrompt(maxQuestions)] : [])
+  // Answers survive a failed refinement so its retry skips the question card. Keyed by
+  // session, so a request without one (scripts) never shares answers.
+  const memory = input.sessionId !== '' ? deps.answers : undefined
+  let memo = memory?.recall(input.sessionId, draft)
+  let system = ''
   let anchors = cfg.fidelityGate ? extractAnchors(draft) : []
   const maxRatio = maxRatioFor(cfg, input.mode)
+  let enhanced = ''
+  // Questions asked this time; a recalled memo reports its own count instead.
+  let askedCount = 0
 
-  const first = await callModel(deps.llm, {
-    route, system, config: cfg, signal: input.signal,
-    userMessage: buildUserMessage(draft, contextBlock, ''),
-  })
-  if (!first.ok) return failureOf(first.failure, cfg)
+  // ---- first rewrite, which may list missing information; skipped when it is already answered ----
+  if (memo === undefined) {
+    const ask = maxQuestions > 0 && input.sessionId !== '' && deps.askUser !== undefined ? deps.askUser(input.sessionId) : undefined
+    // Only invite questions when someone can answer them; otherwise the rewrite stays as before.
+    system = buildSystemPrompt(input.mode, cfg, ask !== undefined ? [questionsPrompt(maxQuestions)] : [])
+    const first = await callModel(deps.llm, {
+      route, system, config: cfg, signal: input.signal,
+      userMessage: buildUserMessage(draft, contextBlock, ''),
+    })
+    if (!first.ok) return failureOf(first.failure, cfg)
 
-  const parsed = parseRewrite(first.text, ask !== undefined ? maxQuestions : 0)
-  let enhanced = normalizeOutput(parsed.text)
-  if (enhanced === '') return { ok: false, code: ERR.EMPTY_OUTPUT, message: '模型没有返回可用内容，原文未改动' }
+    const parsed = parseRewrite(first.text, ask !== undefined ? maxQuestions : 0)
+    enhanced = normalizeOutput(parsed.text)
+    if (enhanced === '') return { ok: false, code: ERR.EMPTY_OUTPUT, message: '模型没有返回可用内容，原文未改动' }
 
-  // ---- follow-up questions: ask, then rewrite once more with the answers ----
+    if (ask !== undefined && parsed.questions.length > 0) {
+      askedCount = parsed.questions.length
+      let reply: SeamAnswer | undefined
+      try {
+        reply = await ask(parsed.questions.map((question, index) => ({ id: questionId(index), question, header: QUESTION_HEADER })), input.signal)
+      } catch {
+        // Closed or unanswerable: keep the first rewrite with its (TBD: ...) notes.
+        reply = undefined
+      }
+      const answered = reply !== undefined ? answeredQuestions(parsed.questions, reply) : []
+      // Remembered before the abort check: answers given just before a cancel still count.
+      if (answered.length > 0) {
+        memo = { asked: askedCount, answered }
+        memory?.remember(input.sessionId, draft, memo)
+      }
+      if (input.signal.aborted) return { ok: false, code: ERR.ABORTED, message: '已取消' }
+    }
+  }
+
+  // ---- follow-up answers: rewrite once more with them ----
   let answersBlock = ''
-  let answeredCount = 0
   // The length budget covers what the user supplied: the draft plus their answers.
   let lengthBase = draft
-  if (ask !== undefined && parsed.questions.length > 0) {
-    let reply: SeamAnswer | undefined
-    try {
-      reply = await ask(parsed.questions.map((question, index) => ({ id: questionId(index), question, header: QUESTION_HEADER })), input.signal)
-    } catch {
-      // Closed or unanswerable: keep the first rewrite with its (TBD: ...) notes.
-      reply = undefined
-    }
-    if (input.signal.aborted) return { ok: false, code: ERR.ABORTED, message: '已取消' }
-    const answered = reply !== undefined ? answeredQuestions(parsed.questions, reply) : []
-    if (answered.length > 0) {
-      answersBlock = formatAnswers(answered)
-      answeredCount = answered.length
-      const answerText = answered.map((a) => a.answer).join('\n')
-      lengthBase = draft + '\n' + answerText
-      if (cfg.fidelityGate) anchors = extractAnchors(lengthBase)
-      system = buildSystemPrompt(input.mode, cfg, [answersPrompt()])
-      const second = await callModel(deps.llm, {
-        route, system, config: cfg, signal: input.signal,
-        userMessage: buildUserMessage(draft, contextBlock, '', answersBlock),
-      })
-      if (!second.ok) return failureOf(second.failure, cfg)
-      const folded = normalizeOutput(parseRewrite(second.text, 0).text)
-      if (folded === '') return { ok: false, code: ERR.EMPTY_OUTPUT, message: '模型没有返回可用内容，原文未改动' }
-      enhanced = folded
-    }
+  if (memo !== undefined) {
+    answersBlock = formatAnswers(memo.answered)
+    lengthBase = draft + '\n' + memo.answered.map((a) => a.answer).join('\n')
+    if (cfg.fidelityGate) anchors = extractAnchors(lengthBase)
+    system = buildSystemPrompt(input.mode, cfg, [answersPrompt()])
+    const second = await callModel(deps.llm, {
+      route, system, config: cfg, signal: input.signal,
+      userMessage: buildUserMessage(draft, contextBlock, '', answersBlock),
+    })
+    if (!second.ok) return failureOf(second.failure, cfg)
+    const folded = normalizeOutput(parseRewrite(second.text, 0).text)
+    if (folded === '') return { ok: false, code: ERR.EMPTY_OUTPUT, message: '模型没有返回可用内容，原文未改动' }
+    enhanced = folded
   }
 
   // ---- gates ----
@@ -280,6 +298,8 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
     }
   }
 
+  // The answers did their job; a later click on the same draft asks afresh.
+  memory?.forget(input.sessionId)
   return {
     ok: true,
     text: split.prefix + enhanced,
@@ -294,7 +314,7 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
       anchors: { total: fidelity.total, kept: fidelity.kept, reinjected },
       note: reinjected > 0 ? fidelityNote(fidelity.missing) : '',
       contextUsed: contextBlock !== '' ? trigger.reason : 'none',
-      questions: { asked: parsed.questions.length, answered: answeredCount },
+      questions: { asked: memo !== undefined ? memo.asked : askedCount, answered: memo !== undefined ? memo.answered.length : 0 },
     },
   }
 }

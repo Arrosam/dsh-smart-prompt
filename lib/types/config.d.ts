@@ -22,6 +22,13 @@ export interface LiveSettings {
 }
 /** Default cap on follow-up questions per refinement (user-chosen). */
 export declare const DEFAULT_MAX_QUESTIONS = 5;
+/** Light-mode length ceiling: the rewrite may reach this multiple of the draft. */
+export declare const DEFAULT_LIGHT_MAX_RATIO = 2;
+/**
+ * Standard-mode length ceiling. 0 = uncapped (user decision): restructuring a draft
+ * that needed follow-up answers was refused too often; set a positive ratio to cap it.
+ */
+export declare const DEFAULT_STANDARD_MAX_RATIO = 0;
 /** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
 export declare const MODE_VALUES: readonly ["standard", "light"];
 export declare const MODEL_SOURCE_VALUES: readonly ["conversation", "dedicated"];
