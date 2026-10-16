@@ -6,8 +6,10 @@ Type your request the way you would say it, click the **✦** button next to Sen
 
 ## Install
 
+In DSH, open **Plugins → Add plugin** and enter `dsh-smart-prompt`. Or from a terminal:
+
 ```sh
-dsh plugin --profile web add github:Arrosam/dsh-smart-prompt
+dsh plugin --profile web add dsh-smart-prompt
 ```
 
 Restart DSH. The ✦ button appears in the composer, just left of Send. No API key is needed: the plugin uses the models you have already set up in DSH.
