@@ -106,6 +106,8 @@ function runImprove(sessionId: string, text: string, actions: InputActionsFace, 
   current.backup = text
   current.meta = null
   current.enhanced = ''
+  // A new refine gets its own success bubble.
+  current.doneBubbleOwner = null
   notify(sessionId)
 
   void (async () => {
@@ -296,7 +298,20 @@ export function StatusBar(props: { sessionId?: string; t: TFn }): React.ReactEle
     return () => { window.clearTimeout(timer) }
   }, [sessionId, phase, token])
 
-  const bubble = bubbleFor(state, phase, phase === 'done' && hiddenToken === token, t)
+  // Each refine's success bubble shows once. The bar that first displays it claims it in the
+  // store; a bar that later finds it claimed by someone else stays hidden. That covers both
+  // ways the host can bring a session back: remounting the bar, or re-rendering the same bar
+  // with another session id and then this one — hence a claim token per (instance, session).
+  const claim = React.useRef<{ sessionId: string | undefined; token: object }>({ sessionId, token: {} })
+  if (claim.current.sessionId !== sessionId) claim.current = { sessionId, token: {} }
+  const self = claim.current.token
+  const claimable = state !== null && phase === 'done' && state.doneBubbleOwner === null
+  React.useEffect(() => {
+    // Claimed after commit so a discarded render (StrictMode) cannot claim it unseen.
+    if (claimable && state !== null) state.doneBubbleOwner = self
+  }, [claimable, state, self])
+  const doneHidden = hiddenToken === token || (state !== null && state.doneBubbleOwner !== null && state.doneBubbleOwner !== self)
+  const bubble = bubbleFor(state, phase, phase === 'done' && doneHidden, t)
 
   // Keep the last bubble mounted briefly after it is hidden so it can slide down and fade
   // out; React would otherwise remove it at once. Adjusting state during render is React's

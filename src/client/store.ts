@@ -41,13 +41,19 @@ export interface SessionState {
   controller: AbortController | null
   /** Captured from the button's slot props; Revert/Retry reuse it to write the draft. */
   actions: InputActionsFace | null
+  /**
+   * The status-bar instance that showed this refine's success bubble, or null before any has.
+   * Kept here, not in the component, because navigating away unmounts the bar and a fresh
+   * instance must know the bubble was already shown (it showed again on every return).
+   */
+  doneBubbleOwner: object | null
 }
 
 const states = new Map<string, SessionState>()
 const listeners = new Map<string, Set<() => void>>()
 
 function fresh(): SessionState {
-  return { phase: 'idle', backup: '', enhanced: '', meta: null, error: null, controller: null, actions: null }
+  return { phase: 'idle', backup: '', enhanced: '', meta: null, error: null, controller: null, actions: null, doneBubbleOwner: null }
 }
 
 /** State for one session, created on first use. */
@@ -91,5 +97,6 @@ export function clear(sessionId: string, phase: 'idle' | 'error' = 'idle', error
   state.meta = null
   state.controller = null
   state.actions = actions
+  state.doneBubbleOwner = null
   notify(sessionId)
 }

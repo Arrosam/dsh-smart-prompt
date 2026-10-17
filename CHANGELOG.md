@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- **Fix**: after a refine, switching to another session and back showed the success bubble again, even after it had hidden. It now shows once per refine. Error bubbles are unchanged.
+
 ## 0.10.0
 
 - **Retry on failure**: the error bubble has a **Retry** button that sends the same draft again. Answers you gave to follow-up questions are kept for that draft, so a retry does not open the question card again. They are dropped once a refinement succeeds.
