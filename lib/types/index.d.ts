@@ -13,8 +13,15 @@
  *   matching WorkBuddy's own "less filler, fewer tokens" positioning.
  *
  * When the rewrite finds information missing, the user is asked short follow-up
- * questions through the host's ask-user seam and the draft is rewritten once more
- * with the answers. At most three model calls per click (generation, answers, repair).
+ * questions in the plugin's own composer panel and the draft is rewritten once more
+ * with the answers. While the questions are open, Stardea (星念) proposes ideas for
+ * answering one of them, from web search, the conversation, and the model's own proposals.
+ * At most three model calls per click (generation, answers, repair), plus one per lookup
+ * round the model uses (a settings-page limit, default 3) and one per Stardea request.
+ * All of them are turns of one conversation, so each call reuses the last one's prompt cache.
+ *
+ * The draft's attachments, and the images of the earlier turns carried as context, are
+ * sent to the refinement model with the draft.
  *
  * @module dsh-smart-prompt
  */

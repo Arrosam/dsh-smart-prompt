@@ -2,8 +2,8 @@
  * Follow-up questions about missing information.
  *
  * The first rewrite call may end with a `<missing_info>` block listing what the draft
- * lacks (see `prompts/questions.md`). The orchestrator asks those questions through the
- * host's ask-user seam, then rewrites once more with the answers. Kept pure: parsing and
+ * lacks (see `prompts/questions.md`). The orchestrator asks those questions in the plugin's
+ * own follow-up panel, then rewrites once more with the answers. Kept pure: parsing and
  * formatting only, no host access.
  *
  * @module dsh-smart-prompt/questions
@@ -33,7 +33,10 @@ export interface AnsweredQuestion {
     readonly question: string;
     readonly answer: string;
 }
-/** The ask-user seam's answer shape (`@deepseek-ai/dsh-user-questions`). */
+/**
+ * An answer batch, in the shape of DSH's ask-user seam (`@deepseek-ai/dsh-user-questions`),
+ * which the follow-up panel's answers keep: `selected` holds the picked idea texts.
+ */
 export interface SeamAnswer {
     readonly answers?: readonly {
         readonly id?: unknown;
@@ -44,8 +47,11 @@ export interface SeamAnswer {
 /**
  * Pair the asked questions with the user's answers, dropping skipped ones.
  *
+ * An answer may combine ideas the user picked with their own words (Stardea): every part is
+ * kept, picked ideas first. One part is used as it is; several are listed one per line.
+ *
  * @param questions - questions in ask order.
- * @param answer - the seam's reply.
+ * @param answer - the answer UI's reply.
  * @returns the answered questions, in ask order.
  */
 export declare function answeredQuestions(questions: readonly string[], answer: SeamAnswer): AnsweredQuestion[];

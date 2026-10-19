@@ -9,6 +9,8 @@
  * @module dsh-smart-prompt/context-trigger
  */
 
+import { charLength } from './length-gate.js'
+
 /** Why the trigger fired. */
 export type ContextReason = 'anaphora' | 'short-vague' | 'none'
 
@@ -55,9 +57,7 @@ export function contextTrigger(draft: string): { needed: boolean; reason: Contex
     if (re.test(trimmed)) return { needed: true, reason: 'anaphora' }
   }
 
-  let count = 0
-  for (const _ of trimmed) count += 1
-  if (count <= SHORT_DRAFT_CHARS && !CONCRETE_HINT.test(trimmed)) {
+  if (charLength(trimmed) <= SHORT_DRAFT_CHARS && !CONCRETE_HINT.test(trimmed)) {
     return { needed: true, reason: 'short-vague' }
   }
   return { needed: false, reason: 'none' }

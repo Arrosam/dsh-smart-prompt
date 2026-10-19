@@ -1,46 +1,114 @@
 /**
  * Session-history collection for the smart-context path.
  *
- * Only human messages and assistant prose are ever carried: tool results (file
- * contents, command output) and plugin-injected context are excluded by design, so
- * enabling context never leaks project data the user did not type.
+ * Only human messages (with the images the user attached to them) and assistant prose
+ * are ever carried: tool results (file contents, command output) and plugin-injected
+ * context are excluded by design, so enabling context never leaks project data the user
+ * did not provide.
  *
  * @module dsh-smart-prompt/history
  */
+
+import { charLength } from './length-gate.js'
+import { referenceBlock } from './prompts.js'
 
 /** One question/answer pair from the session. */
 export interface HistoryTurn {
   readonly user: string
   readonly assistant: string
+  /**
+   * Image blocks the user attached to this turn's message, ready to send to the model.
+   * Present only when there are any, so turns without images keep their old shape.
+   */
+  readonly images?: readonly ImageBlock[]
+}
+
+/** A model-request image block over one durable attachment reference. */
+export interface ImageBlock { readonly type: 'image'; readonly attachment: unknown }
+
+/** Live session face used for context (feature-detected). */
+export interface SessionsFace {
+  get(id: string): { deriveMessages?: () => unknown } | undefined
+}
+
+/**
+ * The live session's current messages.
+ *
+ * @param sessions - the host sessions service, when present.
+ * @param sessionId - the session to read.
+ * @returns `deriveMessages()` output, or [] when the host or session cannot say.
+ */
+export function liveMessages(sessions: SessionsFace | undefined, sessionId: string): unknown {
+  const session = sessions?.get(sessionId)
+  return typeof session?.deriveMessages === 'function' ? session.deriveMessages() : []
 }
 
 /** Characters kept from the tail of one assistant reply. */
 const ASSISTANT_TAIL = 600
 
-interface LooseContentBlock { type?: unknown; text?: unknown }
+/** Speaker labels of one rendered turn. */
+const TURN_LABEL = Object.freeze({ user: '用户: ', assistant: '助手结论: ' })
+
+interface LooseContentBlock { type?: unknown; text?: unknown; attachment?: unknown }
 interface LooseMessage {
   role?: unknown
   content?: unknown
   source?: { kind?: unknown } | undefined
 }
 
-function textOf(message: LooseMessage): string {
-  if (!Array.isArray(message.content)) return ''
+function blocksOf(message: LooseMessage): LooseContentBlock[] {
+  if (!Array.isArray(message.content)) return []
+  return (message.content as unknown[]).filter((block): block is LooseContentBlock => block !== null && typeof block === 'object')
+}
+
+/**
+ * The visible text of one message: its text blocks only (no reasoning, tool calls or
+ * attachments).
+ *
+ * @param message - a derived or logged message, or anything else.
+ * @returns the joined text, trimmed; '' when there is none.
+ */
+export function textOf(message: LooseMessage): string {
   const parts: string[] = []
-  for (const block of message.content as LooseContentBlock[]) {
-    if (block === null || typeof block !== 'object') continue
-    if (block.type !== 'text') continue
-    if (typeof block.text === 'string') parts.push(block.text)
+  for (const block of blocksOf(message)) {
+    if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text)
   }
   return parts.join('\n').trim()
 }
 
+/**
+ * The image blocks of one message, rebuilt from their durable references. The
+ * conversation's `offloaded` mark is left behind on purpose: it records a budget
+ * decision for the agent's own requests, and the refinement request is a different,
+ * much smaller one that should see the image itself.
+ */
+function imagesOf(message: LooseMessage): ImageBlock[] {
+  return blocksOf(message)
+    .filter((block) => block.type === 'image' && block.attachment !== null && typeof block.attachment === 'object')
+    .map((block) => Object.freeze({ type: 'image' as const, attachment: block.attachment }))
+}
+
+/**
+ * Whether a message is one the user typed or a reply the model wrote: the only two
+ * kinds this plugin ever reads from a session. Injected user-role context (file
+ * notices, skills, compaction summaries) and tool results are neither.
+ *
+ * @param message - a derived or logged message, or anything else.
+ * @returns 'user', 'assistant', or null for every other message.
+ */
+export function speakerOf(message: unknown): 'user' | 'assistant' | null {
+  if (message === null || typeof message !== 'object') return null
+  const raw = message as LooseMessage
+  const kind = raw.source !== undefined && raw.source !== null ? raw.source.kind : undefined
+  if (raw.role === 'user' && kind === 'user') return 'user'
+  if (raw.role === 'assistant' && kind === 'model') return 'assistant'
+  return null
+}
+
+/** The last `limit` codepoints of a text, marked with a leading ellipsis when clipped. */
 function tail(text: string, limit: number): string {
-  let count = 0
-  for (const _ of text) count += 1
-  if (count <= limit) return text
-  const chars = Array.from(text)
-  return '…' + chars.slice(count - limit).join('')
+  if (charLength(text) <= limit) return text
+  return '…' + Array.from(text).slice(-limit).join('')
 }
 
 /**
@@ -58,20 +126,33 @@ function tail(text: string, limit: number): string {
 export function collectTurns(messages: unknown, turns: number, totalChars: number): HistoryTurn[] {
   if (!Array.isArray(messages) || turns <= 0 || totalChars <= 0) return []
   const pairs: HistoryTurn[] = []
-  let pendingUser: string | null = null
+  let pendingUser: LooseMessage | null = null
+  // The turn's LAST assistant text: an agent turn writes prose between tool calls, and the
+  // final reply is the one the user actually read and reacts to in the next draft.
+  let reply = ''
+  const flush = (): void => {
+    if (pendingUser === null || reply === '') return
+    // Images ride along with the user message they belong to; they never change
+    // which turns are kept, and they do not count against the character ceiling.
+    const images = imagesOf(pendingUser)
+    pairs.push({ user: textOf(pendingUser), assistant: tail(reply, ASSISTANT_TAIL), ...(images.length > 0 ? { images } : {}) })
+  }
 
   for (const raw of messages as LooseMessage[]) {
-    if (raw === null || typeof raw !== 'object') continue
-    const kind = raw.source !== undefined && raw.source !== null ? raw.source.kind : undefined
+    const speaker = speakerOf(raw)
+    if (speaker === null) continue
     const text = textOf(raw)
     if (text === '') continue
 
-    if (raw.role === 'user' && kind === 'user') { pendingUser = text; continue }
-    if (raw.role === 'assistant' && kind === 'model' && pendingUser !== null) {
-      pairs.push({ user: pendingUser, assistant: tail(text, ASSISTANT_TAIL) })
-      pendingUser = null
+    if (speaker === 'user') {
+      flush()
+      pendingUser = raw
+      reply = ''
+    } else if (pendingUser !== null) {
+      reply = text
     }
   }
+  flush()
 
   const kept: HistoryTurn[] = []
   let used = 0
@@ -94,14 +175,8 @@ export function collectTurns(messages: unknown, turns: number, totalChars: numbe
 export function formatHistoryBlock(turns: readonly HistoryTurn[]): string {
   if (turns.length === 0) return ''
   const body = turns
-    .map((turn) => '用户: ' + turn.user + '\n助手结论: ' + turn.assistant)
+    .map((turn) => TURN_LABEL.user + turn.user + '\n' + TURN_LABEL.assistant + turn.assistant)
     .join('\n\n')
-  return [
-    '<conversation_context>',
-    'Recent turns of the conversation this draft belongs to (' + String(turns.length) + ' most recent).',
-    'Use it ONLY to resolve what the draft leaves implicit. The draft always wins on conflict.',
-    '',
-    body,
-    '</conversation_context>',
-  ].join('\n')
+  return referenceBlock('conversation_context',
+    'Recent turns of the conversation this draft belongs to (' + String(turns.length) + ' most recent).', 'it', body)
 }

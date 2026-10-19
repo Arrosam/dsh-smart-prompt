@@ -14,7 +14,12 @@
  */
 
 import React from 'react'
-import { NS } from './locales.js'
+import {
+  DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, DEFAULT_MODE, DEFAULT_MODEL_SOURCE, DEFAULT_STARDEA_IDEAS, DEFAULT_STARDEA_ROUNDS,
+  DEFAULT_STARDEA_WEB_SEARCH, MAX_LOOKUP_ROUNDS, MAX_STARDEA_IDEAS, MAX_STARDEA_ROUNDS, MIN_LOOKUP_ROUNDS, MIN_MAX_QUESTIONS,
+  MIN_STARDEA_IDEAS, MIN_STARDEA_ROUNDS, MODE_VALUES, MODEL_SOURCE_VALUES, isOneOf, type Mode, type ModelSource as Source,
+} from '../settings-fields.js'
+import type { TFn } from './components.js'
 
 /** Profile entry id of the host half (cordis.patch.yml) — the configForms key. */
 export const ENTRY_ID = 'dsh-smart-prompt'
@@ -29,16 +34,67 @@ export const FIELD = {
   model: 'model',
   effort: 'dedicatedReasoningEffort',
   maxQuestions: 'maxQuestions',
+  lookupRounds: 'sessionLookupRounds',
+  stardeaIdeas: 'stardeaIdeas',
+  stardeaRounds: 'stardeaRounds',
+  stardeaWeb: 'stardeaWebSearch',
 } as const
 
-/** Shown when the field is empty; must match `DEFAULT_MAX_QUESTIONS` in the host config. */
-const DEFAULT_MAX_QUESTIONS = 5
-/** Smallest accepted question cap (the host schema's `min(1)`). */
-const MIN_QUESTIONS = 1
+/** Bounds and placeholder of one whole-number field; must match the host Config schema. */
+interface NumberSpec {
+  readonly field: string
+  readonly min: number
+  readonly max: number
+  /** Shown when the field is empty: the host default. */
+  readonly fallback: number
+  readonly label: string
+  readonly hint: string
+}
 
-export type TFn = (key: string) => string
-type Mode = 'standard' | 'light'
-type Source = 'conversation' | 'dedicated'
+/** The whole-number fields, bounded by the same constants as the host Config schema. */
+const NUMBER_FIELDS = {
+  maxQuestions: { field: FIELD.maxQuestions, min: MIN_MAX_QUESTIONS, max: Infinity, fallback: DEFAULT_MAX_QUESTIONS, label: 'settingsMaxQuestions', hint: 'settingsMaxQuestionsHint' },
+  lookupRounds: { field: FIELD.lookupRounds, min: MIN_LOOKUP_ROUNDS, max: MAX_LOOKUP_ROUNDS, fallback: DEFAULT_LOOKUP_ROUNDS, label: 'settingsLookupRounds', hint: 'settingsLookupRoundsHint' },
+  stardeaIdeas: { field: FIELD.stardeaIdeas, min: MIN_STARDEA_IDEAS, max: MAX_STARDEA_IDEAS, fallback: DEFAULT_STARDEA_IDEAS, label: 'settingsStardeaIdeas', hint: 'settingsStardeaIdeasHint' },
+  stardeaRounds: { field: FIELD.stardeaRounds, min: MIN_STARDEA_ROUNDS, max: MAX_STARDEA_ROUNDS, fallback: DEFAULT_STARDEA_ROUNDS, label: 'settingsStardeaRounds', hint: 'settingsStardeaRoundsHint' },
+} as const satisfies Record<string, NumberSpec>
+
+type NumberKey = keyof typeof NUMBER_FIELDS
+/** The number fields in display order. */
+const NUMBER_KEYS = Object.keys(NUMBER_FIELDS) as NumberKey[]
+
+/**
+ * Draft text of an on/off field. The host form model stages every field as text and ships
+ * only text and number specs, so a switch stages one of these and {@link settingsFlagField}
+ * turns it into the boolean the host Config schema declares.
+ */
+const FLAG_TEXT = Object.freeze({ on: 'true', off: 'false' })
+
+/**
+ * Conversion spec of an on/off field, in the shape of the host's `settingsTextField`.
+ *
+ * @param field - field name in the host Config.
+ * @returns the spec: an empty draft clears the field (the schema default applies again),
+ *   'true'/'false' set it, anything else is invalid and blocks the save.
+ */
+function settingsFlagField(field: string): {
+  field: string
+  format: (value: unknown) => string
+  parse: (text: string) => { kind: 'set'; value: boolean } | { kind: 'clear' } | undefined
+} {
+  return {
+    field,
+    format: (value) => value === true ? FLAG_TEXT.on : value === false ? FLAG_TEXT.off : '',
+    parse: (text) => text === '' ? { kind: 'clear' }
+      : text === FLAG_TEXT.on ? { kind: 'set', value: true }
+        : text === FLAG_TEXT.off ? { kind: 'set', value: false } : undefined,
+  }
+}
+
+/** A staged on/off draft as a boolean; empty (nothing saved) reads as the default. */
+function flagOf(text: string, fallback: boolean): boolean {
+  return text === FLAG_TEXT.on ? true : text === FLAG_TEXT.off ? false : fallback
+}
 
 /** One provider group of the host model catalog (`remote.session.modelCatalog()`). */
 export interface CatalogGroup {
@@ -68,6 +124,7 @@ export interface Primitives {
   settingsNumberField(field: string): unknown
   SettingsForm: React.ComponentType<{ labels: Record<string, string>; state: Shell; onSave: () => void; onDiscard: () => void; children?: React.ReactNode }>
   SegmentedControl: React.ComponentType<{ id: string; value: string; options: readonly { value: string; label: string }[]; onChange: (next: string) => void; label: string; disabled?: boolean }>
+  Switch: React.ComponentType<{ checked: boolean; onChange: (next: boolean) => void; label: string; disabled?: boolean }>
 }
 
 /** What the section renders. */
@@ -79,6 +136,14 @@ export interface SettingsState extends Shell {
   effort: string
   /** Draft text of the question cap; empty means the default. */
   maxQuestions: string
+  /** Draft text of the rewrite's session lookup round limit; empty means the default. */
+  lookupRounds: string
+  /** Draft text of the ideas per Stardea click; empty means the default. */
+  stardeaIdeas: string
+  /** Draft text of the lookup rounds per Stardea click; empty means the default. */
+  stardeaRounds: string
+  /** Whether Stardea may search the web, as staged (the default when nothing is saved). */
+  stardeaWebSearch: boolean
   catalog: { status: 'idle' | 'loading' | 'ready' | 'error'; groups: readonly CatalogGroup[] }
 }
 
@@ -87,7 +152,7 @@ const ROUTE_SEP = '\u0000'
 
 /** Mode and source fields store a closed set; anything else reads as the default. */
 function pick<T extends string>(text: string, allowed: readonly T[], fallback: T): T {
-  return (allowed as readonly string[]).includes(text) ? (text as T) : fallback
+  return isOneOf(text, allowed) ? text : fallback
 }
 
 /**
@@ -109,29 +174,31 @@ export function settingsSection(
     primitives.settingsTextField(FIELD.provider),
     primitives.settingsTextField(FIELD.model),
     primitives.settingsTextField(FIELD.effort),
-    primitives.settingsNumberField(FIELD.maxQuestions),
+    ...NUMBER_KEYS.map((key) => primitives.settingsNumberField(NUMBER_FIELDS[key].field)),
+    settingsFlagField(FIELD.stardeaWeb),
   ])
   let catalog: SettingsState['catalog'] = { status: 'idle', groups: [] }
   const catalogListeners = new Set<() => void>()
   const formStore = form.bind(() => {
-    const source = pick<Source>(form.field(FIELD.source).text, ['conversation', 'dedicated'], 'conversation')
+    const source = pick<Source>(form.field(FIELD.source).text, MODEL_SOURCE_VALUES, DEFAULT_MODEL_SOURCE)
     const provider = form.field(FIELD.provider).text
     const model = form.field(FIELD.model).text
-    const maxQuestions = form.field(FIELD.maxQuestions).text
+    const numbers = Object.fromEntries(NUMBER_KEYS.map((key) => [key, form.field(NUMBER_FIELDS[key].field).text])) as Record<NumberKey, string>
     const shell = form.shell()
     return {
       ...shell,
       // "Dedicated" without a model would silently fall back to the conversation's
-      // model, so it blocks the save instead. The host schema rejects a cap below 1
-      // or a fraction, so those block the save here too.
+      // model, so it blocks the save instead. The host schema rejects a number outside
+      // its bounds or a fraction, so those block the save here too.
       invalid: shell.invalid || (source === 'dedicated' && (provider === '' || model === ''))
-        || (maxQuestions !== '' && !validQuestionCap(maxQuestions)),
-      mode: pick<Mode>(form.field(FIELD.mode).text, ['standard', 'light'], 'standard'),
+        || NUMBER_KEYS.some((key) => !validNumber(numbers[key], NUMBER_FIELDS[key])),
+      mode: pick<Mode>(form.field(FIELD.mode).text, MODE_VALUES, DEFAULT_MODE),
       source,
       provider,
       model,
       effort: form.field(FIELD.effort).text,
-      maxQuestions,
+      ...numbers,
+      stardeaWebSearch: flagOf(form.field(FIELD.stardeaWeb).text, DEFAULT_STARDEA_WEB_SEARCH),
     }
   })
   // The model catalog is fetched state, not form state: merge it in with a cached
@@ -181,15 +248,21 @@ export function settingsSection(
     },
     setEffort: (effort) => { base.edit(FIELD.effort, effort) },
     setMaxQuestions: (text) => { base.edit(FIELD.maxQuestions, text) },
+    setLookupRounds: (text) => { base.edit(FIELD.lookupRounds, text) },
+    setStardeaIdeas: (text) => { base.edit(FIELD.stardeaIdeas, text) },
+    setStardeaRounds: (text) => { base.edit(FIELD.stardeaRounds, text) },
+    setStardeaWebSearch: (on) => { base.edit(FIELD.stardeaWeb, on ? FLAG_TEXT.on : FLAG_TEXT.off) },
     refreshCatalog,
   }
   if (stable.getSnapshot().source === 'dedicated') refreshCatalog()
   return { store: stable, actions, dispose: () => { disposed = true; form.dispose() } }
 }
 
-function validQuestionCap(text: string): boolean {
+/** Empty (the default) or a whole number within the field's bounds. */
+function validNumber(text: string, spec: NumberSpec): boolean {
+  if (text === '') return true
   const value = Number(text)
-  return Number.isInteger(value) && value >= MIN_QUESTIONS
+  return Number.isInteger(value) && value >= spec.min && value <= spec.max
 }
 
 /** Actions the section's slot entry injects. */
@@ -201,6 +274,10 @@ export interface SettingsActions {
   setRoute(provider: string, model: string, effort: string): void
   setEffort(effort: string): void
   setMaxQuestions(text: string): void
+  setLookupRounds(text: string): void
+  setStardeaIdeas(text: string): void
+  setStardeaRounds(text: string): void
+  setStardeaWebSearch(on: boolean): void
   refreshCatalog(): void
 }
 
@@ -218,7 +295,7 @@ export type SettingsProps = SettingsActions & {
  * @returns the slot component.
  */
 export function SettingsSection(primitives: Primitives): (props: SettingsProps) => React.ReactElement | null {
-  const { SettingsForm, SegmentedControl } = primitives
+  const { SettingsForm, SegmentedControl, Switch } = primitives
   return function SmartPromptSettings(props: SettingsProps): React.ReactElement | null {
     const { t } = props
     const state = props.useSmartPromptSettings((s) => s)
@@ -237,6 +314,27 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
           React.createElement('div', { className: 'dip-set-label' }, label),
           React.createElement('div', { className: 'dip-set-hint' }, hint)),
         React.createElement('div', { className: 'dip-set-control' }, control))
+
+    // One whole-number row; every number field shares the same input and validation.
+    const numberRow = (key: NumberKey, onEdit: (text: string) => void): React.ReactElement => {
+      const spec: NumberSpec = NUMBER_FIELDS[key]
+      const value = state[key]
+      return row(t(spec.label), t(spec.hint),
+        React.createElement('input', {
+          className: 'dip-set-number',
+          type: 'number',
+          min: spec.min,
+          max: Number.isFinite(spec.max) ? spec.max : undefined,
+          step: 1,
+          inputMode: 'numeric',
+          'aria-label': t(spec.label),
+          placeholder: String(spec.fallback),
+          value,
+          disabled,
+          'aria-invalid': !validNumber(value, spec),
+          onChange: (event: React.ChangeEvent<HTMLInputElement>) => { onEdit(event.target.value) },
+        }))
+    }
 
     return React.createElement(SettingsForm, {
       labels: {
@@ -312,23 +410,17 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
           ? React.createElement('p', { className: 'dip-set-error' }, t('settingsPickModelRequired'))
           : null)
       : null,
-    row(t('settingsMaxQuestions'), t('settingsMaxQuestionsHint'),
-      React.createElement('input', {
-        className: 'dip-set-number',
-        type: 'number',
-        min: MIN_QUESTIONS,
-        step: 1,
-        inputMode: 'numeric',
-        'aria-label': t('settingsMaxQuestions'),
-        placeholder: String(DEFAULT_MAX_QUESTIONS),
-        value: state.maxQuestions,
+    numberRow('maxQuestions', props.setMaxQuestions),
+    numberRow('lookupRounds', props.setLookupRounds),
+    numberRow('stardeaIdeas', props.setStardeaIdeas),
+    numberRow('stardeaRounds', props.setStardeaRounds),
+    row(t('settingsStardeaWeb'), t('settingsStardeaWebHint'),
+      React.createElement(Switch, {
+        checked: state.stardeaWebSearch,
+        label: t('settingsStardeaWeb'),
         disabled,
-        'aria-invalid': state.maxQuestions !== '' && !validQuestionCap(state.maxQuestions),
-        onChange: (event: React.ChangeEvent<HTMLInputElement>) => { props.setMaxQuestions(event.target.value) },
+        onChange: (next) => { props.setStardeaWebSearch(next) },
       })),
     )
   }
 }
-
-/** Locale namespace the section's copy lives in. */
-export const SETTINGS_NS = NS

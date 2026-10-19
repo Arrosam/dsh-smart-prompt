@@ -1,13 +1,14 @@
 /**
- * The two visible pieces: the composer button (star, or Revert | Retry after a refine)
- * and the status bar.
+ * The visible pieces: the composer button (star, or Revert | Retry after a refine), the
+ * status bar, and the follow-up panel that takes the composer seat while questions are open.
  *
  * @module dsh-smart-prompt/client/components
  */
 
 import React from 'react'
 import { splitCommand } from '../command.js'
-import { clear, notify, storeFor, subscribe, type InputActionsFace, type Meta } from './store.js'
+import { cancelRefine, runImprove } from './refine.js'
+import { clear, storeFor, subscribe, type AttachmentSerializer, type InputActionsFace, type Meta } from './store.js'
 
 /** Localized copy lookup bound to the plugin namespace. */
 export type TFn = (key: string) => string
@@ -21,10 +22,10 @@ export interface SeatProps {
   inputActions?: InputActionsFace
   /** Older-host fallback: a point-in-time input snapshot. */
   input?: { draft?: unknown; phase?: unknown }
+  /** Serializes draft attachments; absent on hosts without the conversation service. */
+  serializeAttachments?: AttachmentSerializer
   t: TFn
 }
-
-const API = '/dsh-smart-prompt/api/improve'
 
 /**
  * Keep a press on the chip from taking focus out of the composer.
@@ -38,26 +39,38 @@ const API = '/dsh-smart-prompt/api/improve'
  */
 const keepComposerFocus = (event: React.MouseEvent): void => { event.preventDefault() }
 
-/** Stroke paths (12x12 grid) for the capsule glyphs: a back-arrow for Revert, a circular arrow for Retry. */
-const CAPSULE_ICON_PATH = {
+/**
+ * Stroke paths (12x12 grid) for the small line glyphs: a back-arrow for Revert, a circular
+ * arrow for Retry, a cross for closing the follow-up panel.
+ */
+const STROKE_ICON_PATH = {
   revert: 'M4.6 2.2L1.8 5L4.6 7.8M1.8 5H7.4A3 3 0 0 1 7.4 11H5.2',
   retry: 'M10.2 6A4.2 4.2 0 1 1 8.6 2.7M8.9 0.9L9.2 3.2L6.9 3.6',
+  close: 'M3 3L9 9M9 3L3 9',
 } as const
 
-/** Small stroke glyph for one half of the Revert | Retry capsule; inherits the label colour. */
-function CapsuleIcon(kind: keyof typeof CAPSULE_ICON_PATH): React.ReactElement {
-  return React.createElement('svg', { className: 'dip-capsule-icon', viewBox: '0 0 12 12', width: '12', height: '12', 'aria-hidden': 'true', focusable: 'false' },
-    React.createElement('path', { d: CAPSULE_ICON_PATH[kind], fill: 'none', stroke: 'currentColor', strokeWidth: '1.4', strokeLinecap: 'round', strokeLinejoin: 'round' }),
+/** Small stroke glyph that inherits the label colour (capsule halves, panel close). */
+export function StrokeIcon(className: string, kind: keyof typeof STROKE_ICON_PATH): React.ReactElement {
+  return React.createElement('svg', { className, viewBox: '0 0 12 12', width: '12', height: '12', 'aria-hidden': 'true', focusable: 'false' },
+    React.createElement('path', { d: STROKE_ICON_PATH[kind], fill: 'none', stroke: 'currentColor', strokeWidth: '1.4', strokeLinecap: 'round', strokeLinejoin: 'round' }),
   )
 }
+
+/**
+ * One labelled capsule button (Revert, Retry, or the failure bubble's Retry). Every one
+ * keeps the composer's focus on press.
+ */
+function capsuleButton(className: string, icon: keyof typeof STROKE_ICON_PATH, title: string, label: string, onClick: (event: React.MouseEvent) => void): React.ReactElement {
+  return React.createElement('button', { type: 'button', className, title, onMouseDown: keepComposerFocus, onClick }, StrokeIcon('dip-capsule-icon', icon), label)
+}
+
+/** Four-point sparkle outline on a 16x16 grid, centred on (8, 8); the Stardea glyph reuses it. */
+export const SPARKLE_PATH = 'M8 1.2l1.35 3.9a2 2 0 001.25 1.25l3.9 1.35-3.9 1.35a2 2 0 00-1.25 1.25L8 14.8l-1.35-3.9a2 2 0 00-1.25-1.25L1.5 8.3l3.9-1.35A2 2 0 006.65 5.7L8 1.2z'
 
 /** Four-point sparkle, filled with the text colour so it follows the host theme. */
 function Sparkle(): React.ReactElement {
   return React.createElement('svg', { className: 'dip-icon', viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' },
-    React.createElement('path', {
-      d: 'M8 1.2l1.35 3.9a2 2 0 001.25 1.25l3.9 1.35-3.9 1.35a2 2 0 00-1.25 1.25L8 14.8l-1.35-3.9a2 2 0 00-1.25-1.25L1.5 8.3l3.9-1.35A2 2 0 006.65 5.7L8 1.2z',
-      fill: 'currentColor',
-    }),
+    React.createElement('path', { d: SPARKLE_PATH, fill: 'currentColor' }),
   )
 }
 
@@ -74,80 +87,27 @@ function readDraft(props: SeatProps): string {
   return typeof fallback === 'string' ? fallback : ''
 }
 
+/** Stable empty list: a selector must not return a fresh array on every read. */
+const NO_ATTACHMENTS: readonly string[] = Object.freeze([])
+
+/** Read the composer's ordered attachment ids (empty on hosts whose input state has none). */
+function readAttachmentIds(props: SeatProps): readonly string[] {
+  if (typeof props.useInput !== 'function') return NO_ATTACHMENTS
+  const value = props.useInput((state: unknown) => {
+    const ids = (state as { attachmentIds?: unknown } | null)?.attachmentIds
+    return Array.isArray(ids) ? ids : NO_ATTACHMENTS
+  })
+  return Array.isArray(value) ? value as readonly string[] : NO_ATTACHMENTS
+}
+
 /** Force a re-render whenever this session's store entry changes. */
-function useSessionState(sessionId: string | undefined): number {
+export function useSessionState(sessionId: string | undefined): number {
   const [version, setVersion] = React.useState(0)
   React.useEffect(() => {
     if (sessionId === undefined) return undefined
     return subscribe(sessionId, () => { setVersion((v: number) => v + 1) })
   }, [sessionId])
   return version
-}
-
-/**
- * Send one draft to the host and write the result into the composer.
- *
- * Shared by the composer button and the status bar's Retry, so both follow the same
- * state transitions: busy -> done (draft replaced, `backup` keeps `text`) or
- * busy -> error (draft untouched). A slash-command draft with no body is ignored.
- *
- * @param sessionId - the session whose composer is rewritten.
- * @param text - the draft to enhance; becomes the Revert target.
- * @param actions - composer actions used to write the result.
- * @param t - localized copy lookup for failure messages.
- */
-function runImprove(sessionId: string, text: string, actions: InputActionsFace, t: TFn): void {
-  if (splitCommand(text).body === '') return
-  const current = storeFor(sessionId)
-  const controller = new AbortController()
-  current.controller = controller
-  current.phase = 'busy'
-  current.error = null
-  current.backup = text
-  current.meta = null
-  current.enhanced = ''
-  // A new refine gets its own success bubble.
-  current.doneBubbleOwner = null
-  notify(sessionId)
-
-  void (async () => {
-    try {
-      const response = await fetch(API, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        // No mode: the host reads it from the plugin settings page.
-        body: JSON.stringify({ sessionId, text }),
-        signal: controller.signal,
-      })
-      const data = (await response.json()) as {
-        ok?: boolean; code?: string; message?: string; text?: string; meta?: Meta
-      }
-      const latest = storeFor(sessionId)
-      if (data.ok === true && typeof data.text === 'string' && data.text !== '') {
-        latest.enhanced = data.text
-        latest.meta = data.meta !== undefined ? data.meta : null
-        latest.phase = 'done'
-        latest.controller = null
-        actions.setDraft(data.text)
-        notify(sessionId)
-        return
-      }
-      const code = typeof data.code === 'string' ? data.code : 'UNKNOWN'
-      const key = 'err_' + code
-      const localized = t(key)
-      latest.phase = 'error'
-      latest.error = localized !== key ? localized : (typeof data.message === 'string' && data.message !== '' ? data.message : t('err_UNKNOWN'))
-      latest.controller = null
-      notify(sessionId)
-    } catch (error) {
-      const latest = storeFor(sessionId)
-      latest.controller = null
-      const aborted = error instanceof DOMException && error.name === 'AbortError'
-      latest.phase = 'error'
-      latest.error = aborted ? t('err_ABORTED') : t('err_UPSTREAM')
-      notify(sessionId)
-    }
-  })()
 }
 
 /**
@@ -160,6 +120,7 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
   const sessionId = props.sessionId
   useSessionState(sessionId)
   const draft = readDraft(props)
+  const attachmentIds = readAttachmentIds(props)
   // A leading slash token belongs to the harness; only the text after it is ours.
   // A command with no body therefore has nothing to enhance — but a command WITH a
   // body is exactly the case worth enhancing.
@@ -170,16 +131,18 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
   const busy = state !== null && state.phase === 'busy'
   const actions = props.inputActions !== undefined ? props.inputActions : (state !== null ? state.actions : null)
 
-  // Keep the store's action face fresh so Revert/Retry can write the draft.
-  if (state !== null && props.inputActions !== undefined && state.actions !== props.inputActions) {
-    state.actions = props.inputActions
+  // Keep the store's composer faces fresh so Revert/Retry can write the draft and every
+  // refine sends the attachments the composer holds now.
+  if (state !== null) {
+    if (props.inputActions !== undefined && state.actions !== props.inputActions) state.actions = props.inputActions
+    state.attachmentIds = attachmentIds
+    if (props.serializeAttachments !== undefined) state.serialize = props.serializeAttachments
   }
 
   const onClick = React.useCallback(() => {
     if (sessionId === undefined || actions === null) return
-    const current = storeFor(sessionId)
-    if (current.phase === 'busy') {
-      if (current.controller !== null) current.controller.abort()
+    if (storeFor(sessionId).phase === 'busy') {
+      cancelRefine(sessionId, t)
       return
     }
     runImprove(sessionId, draft, actions, t)
@@ -214,9 +177,9 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
     // After a refine the button itself becomes the Revert | Retry capsule: the same
     // plate, two halves split by the hairline divider.
     return React.createElement('div', { className: 'dip-root', 'data-refined': 'true', role: 'group' },
-      React.createElement('button', { type: 'button', className: 'dip-revert', title: t('revertTitle'), onMouseDown: keepComposerFocus, onClick: onRevert }, CapsuleIcon('revert'), t('revert')),
+      capsuleButton('dip-revert', 'revert', t('revertTitle'), t('revert'), onRevert),
       React.createElement('span', { className: 'dip-divider', 'aria-hidden': 'true' }),
-      React.createElement('button', { type: 'button', className: 'dip-retry', title: t('retryTitle'), onMouseDown: keepComposerFocus, onClick: onRetry }, CapsuleIcon('retry'), t('retry')),
+      capsuleButton('dip-retry', 'retry', t('retryTitle'), t('retry'), onRetry),
     )
   }
 
@@ -240,7 +203,12 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
   )
 }
 
-/** Human-readable certificate: "保真 12/12 · 1.4x · 2.1s". */
+/** Token use as `input(cached) - output`, e.g. `1200(3400) - 560`, in plain integers. */
+function tokenReport(usage: NonNullable<Meta['usage']>): string {
+  return String(usage.input) + '(' + String(usage.cached) + ') - ' + String(usage.output)
+}
+
+/** Human-readable certificate: "保真 12/12 · 1.4x · 2.1s · tokens 1200(3400) - 560". */
 function certificate(meta: Meta, t: TFn): string {
   const parts: string[] = []
   if (meta.anchors.total > 0) {
@@ -252,11 +220,16 @@ function certificate(meta: Meta, t: TFn): string {
   if (meta.questions !== undefined && meta.questions.answered > 0) {
     parts.push(t('answeredTag') + ' ' + String(meta.questions.answered) + '/' + String(meta.questions.asked))
   }
+  if (meta.usage !== undefined) parts.push(t('tokens') + ' ' + tokenReport(meta.usage))
   return parts.join(' \u00b7 ')
 }
 
 /** Exit duration of the status bubble; must match `dip-bar-out` in styles.ts. */
 const BUBBLE_EXIT_MS = 160
+/** How long a success bubble stays before it hides. */
+const BUBBLE_DONE_MS = 8000
+/** How long a failure bubble stays before the session returns to idle. */
+const BUBBLE_ERROR_MS = 12000
 
 /** What the status bubble shows; null when it should be hidden. */
 interface Bubble { kind: 'done' | 'error'; text: string }
@@ -288,7 +261,7 @@ export function StatusBar(props: { sessionId?: string; t: TFn }): React.ReactEle
   React.useEffect(() => {
     if (sessionId === undefined) return undefined
     if (phase !== 'done' && phase !== 'error') return undefined
-    const ms = phase === 'done' ? 8000 : 12000
+    const ms = phase === 'done' ? BUBBLE_DONE_MS : BUBBLE_ERROR_MS
     // A finished refine only hides the bar: clearing the store would drop the backup the
     // composer capsule needs for Revert/Retry until the draft is edited or sent.
     const timer = window.setTimeout(() => {
@@ -331,7 +304,7 @@ export function StatusBar(props: { sessionId?: string; t: TFn }): React.ReactEle
   }, [leaving])
 
   // Retry resends the draft the failed request started from (kept as `backup`); the host
-  // still holds any follow-up answers given for it, so the question card is not shown again.
+  // still holds any follow-up answers given for it, so the follow-up panel is not shown again.
   // The overlay anchor sits inside the composer card, whose own click handler (workspace
   // trigger) must not also fire.
   const onRetry = React.useCallback((event: React.MouseEvent) => {
@@ -352,7 +325,7 @@ export function StatusBar(props: { sessionId?: string; t: TFn }): React.ReactEle
   },
   React.createElement('span', { className: 'dip-bar-text' }, visible.text),
   canRetry
-    ? React.createElement('button', { type: 'button', className: 'dip-bar-retry', title: t('retryFailedTitle'), onMouseDown: keepComposerFocus, onClick: onRetry }, CapsuleIcon('retry'), t('retry'))
+    ? capsuleButton('dip-bar-retry', 'retry', t('retryFailedTitle'), t('retry'), onRetry)
     : null,
   )
 }

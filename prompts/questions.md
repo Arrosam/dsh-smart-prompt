@@ -11,6 +11,8 @@ questions, so:
 - At most {{maxQuestions}} questions, most important first. One short sentence each, in the same
   language as the draft.
 - Still write the full rewrite first, with "(TBD: ...)" where the information is missing.
+- Only the first rewrite may carry this block. Never add it to a rewrite that folds in answers, to a
+  repair, or to a reply with ideas.
 
 Format, exactly, at the very end of your output:
 

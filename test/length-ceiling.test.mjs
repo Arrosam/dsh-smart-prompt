@@ -24,7 +24,8 @@ function stubLlm(replies) {
   }
 }
 
-const userText = (call) => call.messages[0].content.map((p) => p.text ?? '').join('')
+/** Text of a request's latest user turn: the repair is appended after the reply it repairs. */
+const lastUserText = (call) => call.messages.filter((m) => m.role === 'user').at(-1).content.map((p) => p.text ?? '').join('')
 
 // No hard facts (paths, numbers, code), so the fidelity gate stays silent and the
 // length gate alone decides.
@@ -151,7 +152,7 @@ test('LC-16 [BVA/Decision] standard capped at 2.5: 601 chars triggers one repair
   const out = await run(llm, resolveConfig({ standardMaxRatio: 2.5 }))
   assert.equal(out.ok, true)
   assert.equal(llm.calls.length, 2)
-  assert.match(userText(llm.calls[1]), /budget of 600\b/)
+  assert.match(lastUserText(llm.calls[1]), /budget of 600\b/)
 })
 
 test('LC-17 [Decision] standard capped at 2.5: still over after repair -> LENGTH_EXCEEDED', async () => {
@@ -176,7 +177,7 @@ test('LC-19 [BVA] light default: 601 chars -> one repair call with budget 600', 
   const out = await run(llm, resolveConfig({}), { mode: 'light' })
   assert.equal(out.ok, true)
   assert.equal(llm.calls.length, 2)
-  const body = userText(llm.calls[1])
+  const body = lastUserText(llm.calls[1])
   assert.match(body, /too long/)
   assert.match(body, /budget of 600\b/)
 })
@@ -200,7 +201,7 @@ test('LC-21 [BVA] light on a 400-char draft: 800 ok, 801 repaired against budget
   const overLlm = stubLlm(['x'.repeat(801), 'y'.repeat(801)])
   const over = await run(overLlm, resolveConfig({}), { mode: 'light', draft })
   assert.equal(over.code, 'LENGTH_EXCEEDED')
-  assert.match(userText(overLlm.calls[1]), /budget of 800\b/)
+  assert.match(lastUserText(overLlm.calls[1]), /budget of 800\b/)
 })
 
 test('LC-22 [Decision] the length gate switched off: light never repairs or refuses', async () => {

@@ -52,7 +52,11 @@ function stubAsk(reply) {
   }
 }
 
-const userText = (call) => call.messages[0].content.map((p) => p.text ?? '').join('')
+const textOf = (message) => message.content.map((p) => p.text ?? '').join('')
+/** Text of a request's first user turn (a retry folds remembered answers into it). */
+const userText = (call) => textOf(call.messages[0])
+/** Text of a request's latest user turn (an answers rewrite is appended as a new turn). */
+const lastUserText = (call) => textOf(call.messages.filter((m) => m.role === 'user').at(-1))
 
 const DRAFT = '给那个接口加上限流'
 const OTHER_DRAFT = '给那个页面加上缓存'
@@ -146,7 +150,7 @@ test('RA-04 [EP length] after LENGTH_EXCEEDED in light mode, the retry reuses th
   assert.match(first.message, /5000 > 600/)
   assert.equal(ask1.asked.length, 1)
   assert.equal(llm1.calls.length, 3, 'question generation + answer folding + one length repair')
-  assert.match(userText(llm1.calls[1]), /<user_answers>/)
+  assert.match(lastUserText(llm1.calls[1]), /<user_answers>/)
 
   const llm = stubLlm(['给登录接口加上按用户的限流。'])
   const ask = stubAsk(SOFT)

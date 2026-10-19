@@ -7,12 +7,14 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import z from '@deepseek-ai/schemastery'
+import {
+  DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, DEFAULT_MODE, DEFAULT_MODEL_SOURCE, DEFAULT_STARDEA_IDEAS, DEFAULT_STARDEA_ROUNDS,
+  DEFAULT_STARDEA_WEB_SEARCH, MAX_LOOKUP_ROUNDS, MAX_STARDEA_IDEAS, MAX_STARDEA_ROUNDS, MIN_LOOKUP_ROUNDS, MIN_MAX_QUESTIONS,
+  MIN_STARDEA_IDEAS, MIN_STARDEA_ROUNDS, MODE_VALUES, MODEL_SOURCE_VALUES, isOneOf, type Mode, type ModelSource,
+} from './settings-fields.js'
+import { asRecord, trimmedText } from './values.js'
 
-/** Enhancement mode. */
-export type Mode = 'light' | 'standard'
-
-/** Which model refines the prompt. */
-export type ModelSource = 'conversation' | 'dedicated'
+export { DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, MAX_LOOKUP_ROUNDS, MODE_VALUES, MODEL_SOURCE_VALUES, type Mode, type ModelSource }
 
 /** Values the settings page edits; re-read on every request so a save applies at once. */
 export interface LiveSettings {
@@ -25,10 +27,15 @@ export interface LiveSettings {
   readonly reasoningEffort: string
   /** Most follow-up questions one refinement may ask about missing information. */
   readonly maxQuestions: number
+  /** Most rounds of session search/read the rewrite may run; 0 turns its lookups off. */
+  readonly sessionLookupRounds: number
+  /** Most new ideas one Stardea click returns. */
+  readonly stardeaIdeas: number
+  /** Most lookup rounds one Stardea click may run; 0 proposes ideas without searching. */
+  readonly stardeaRounds: number
+  /** Whether Stardea may search the web (through DSH's web search service). */
+  readonly stardeaWebSearch: boolean
 }
-
-/** Default cap on follow-up questions per refinement (user-chosen). */
-export const DEFAULT_MAX_QUESTIONS = 5
 
 /** Light-mode length ceiling: the rewrite may reach this multiple of the draft. */
 export const DEFAULT_LIGHT_MAX_RATIO = 2
@@ -38,9 +45,32 @@ export const DEFAULT_LIGHT_MAX_RATIO = 2
  */
 export const DEFAULT_STANDARD_MAX_RATIO = 0
 
-/** Settings-page fields. `.volatile()` is what puts them on the DSH settings page (0.2.0+). */
-export const MODE_VALUES = ['standard', 'light'] as const
-export const MODEL_SOURCE_VALUES = ['conversation', 'dedicated'] as const
+/**
+ * Defaults of the loader-only fields. The schema declares them and `resolveConfig` falls
+ * back to them, so both read this one table.
+ */
+const DEFAULTS = Object.freeze({
+  lightMaxRatio: DEFAULT_LIGHT_MAX_RATIO,
+  standardMaxRatio: DEFAULT_STANDARD_MAX_RATIO,
+  acceptanceCriteria: false,
+  temperature: 0.3,
+  maxTokens: 8192,
+  timeoutMs: 180000,
+  maxInputChars: 20000,
+  contextTurns: 3,
+  contextChars: 6000,
+  smartContext: true,
+  fidelityGate: true,
+  lengthGate: true,
+  // Size limit of the workspace knowledge file (SMART-PROMPT.md), in characters; 0 turns it off.
+  // Read in full at the start of every refinement, so it is kept to a small share of the prompt.
+  knowledgeChars: 4000,
+  // 'low' by default: a rewrite is a shallow task, and reasoning models at the
+  // agent's default effort (often max) can burn minutes or exhaust a small token
+  // budget on thinking before any answer text arrives.
+  reasoningEffort: 'low',
+  logFailures: true,
+})
 
 /** Runtime configuration after defaults are applied. */
 export interface ResolvedConfig {
@@ -57,37 +87,41 @@ export interface ResolvedConfig {
   readonly smartContext: boolean
   readonly fidelityGate: boolean
   readonly lengthGate: boolean
+  /** Size limit of the workspace knowledge file in characters; 0 turns the file off. */
+  readonly knowledgeChars: number
   readonly provider: string
   readonly model: string
   readonly reasoningEffort: string
   readonly logFailures: boolean
 }
 
-/** Loader schema — every key optional, defaults declared here. */
+/** Loader schema — every key optional. `.volatile()` is what puts a field on the DSH settings page (0.2.0+). */
 export const Config = z.object({
-  defaultMode: z.union(MODE_VALUES).default('standard').volatile(),
-  modelSource: z.union(MODEL_SOURCE_VALUES).default('conversation').volatile(),
-  lightMaxRatio: z.number().default(DEFAULT_LIGHT_MAX_RATIO),
-  standardMaxRatio: z.number().default(DEFAULT_STANDARD_MAX_RATIO),
-  acceptanceCriteria: z.boolean().default(false),
-  temperature: z.number().default(0.3),
-  maxTokens: z.number().default(8192),
-  timeoutMs: z.number().default(180000),
-  maxInputChars: z.number().default(20000),
-  contextTurns: z.number().default(3),
-  contextChars: z.number().default(6000),
-  smartContext: z.boolean().default(true),
-  fidelityGate: z.boolean().default(true),
-  lengthGate: z.boolean().default(true),
+  defaultMode: z.union(MODE_VALUES).default(DEFAULT_MODE).volatile(),
+  modelSource: z.union(MODEL_SOURCE_VALUES).default(DEFAULT_MODEL_SOURCE).volatile(),
+  lightMaxRatio: z.number().default(DEFAULTS.lightMaxRatio),
+  standardMaxRatio: z.number().default(DEFAULTS.standardMaxRatio),
+  acceptanceCriteria: z.boolean().default(DEFAULTS.acceptanceCriteria),
+  temperature: z.number().default(DEFAULTS.temperature),
+  maxTokens: z.number().default(DEFAULTS.maxTokens),
+  timeoutMs: z.number().default(DEFAULTS.timeoutMs),
+  maxInputChars: z.number().default(DEFAULTS.maxInputChars),
+  contextTurns: z.number().default(DEFAULTS.contextTurns),
+  contextChars: z.number().default(DEFAULTS.contextChars),
+  smartContext: z.boolean().default(DEFAULTS.smartContext),
+  fidelityGate: z.boolean().default(DEFAULTS.fidelityGate),
+  lengthGate: z.boolean().default(DEFAULTS.lengthGate),
+  knowledgeChars: z.number().default(DEFAULTS.knowledgeChars),
   provider: z.string().default('').volatile(),
   model: z.string().default('').volatile(),
   dedicatedReasoningEffort: z.string().default('').volatile(),
-  maxQuestions: z.natural().min(1).default(DEFAULT_MAX_QUESTIONS).volatile(),
-  // 'low' by default: a rewrite is a shallow task, and reasoning models at the
-  // agent's default effort (often max) can burn minutes or exhaust a small token
-  // budget on thinking before any answer text arrives.
-  reasoningEffort: z.string().default('low'),
-  logFailures: z.boolean().default(true),
+  maxQuestions: z.natural().min(MIN_MAX_QUESTIONS).default(DEFAULT_MAX_QUESTIONS).volatile(),
+  sessionLookupRounds: z.natural().max(MAX_LOOKUP_ROUNDS).default(DEFAULT_LOOKUP_ROUNDS).volatile(),
+  stardeaIdeas: z.natural().min(MIN_STARDEA_IDEAS).max(MAX_STARDEA_IDEAS).default(DEFAULT_STARDEA_IDEAS).volatile(),
+  stardeaRounds: z.natural().max(MAX_STARDEA_ROUNDS).default(DEFAULT_STARDEA_ROUNDS).volatile(),
+  stardeaWebSearch: z.boolean().default(DEFAULT_STARDEA_WEB_SEARCH).volatile(),
+  reasoningEffort: z.string().default(DEFAULTS.reasoningEffort),
+  logFailures: z.boolean().default(DEFAULTS.logFailures),
 })
 
 /** Read one field that may be a volatile reference (`.get()`) or a plain value. */
@@ -104,24 +138,26 @@ function live(value: unknown): unknown {
  * @returns the current mode, model source, and dedicated route.
  */
 export function readLiveSettings(raw: unknown): LiveSettings {
-  const c = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const c = asRecord(raw)
+  const mode = live(c.defaultMode)
   const source = live(c.modelSource)
   return {
-    mode: pickMode(live(c.defaultMode), 'standard'),
-    modelSource: source === 'dedicated' ? 'dedicated' : 'conversation',
-    provider: text(live(c.provider)),
-    model: text(live(c.model)),
-    reasoningEffort: text(live(c.dedicatedReasoningEffort)),
-    maxQuestions: wholeAtLeastOne(live(c.maxQuestions), DEFAULT_MAX_QUESTIONS),
+    mode: isOneOf(mode, MODE_VALUES) ? mode : DEFAULT_MODE,
+    modelSource: isOneOf(source, MODEL_SOURCE_VALUES) ? source : DEFAULT_MODEL_SOURCE,
+    provider: trimmedText(live(c.provider)),
+    model: trimmedText(live(c.model)),
+    reasoningEffort: trimmedText(live(c.dedicatedReasoningEffort)),
+    maxQuestions: wholeInRange(live(c.maxQuestions), MIN_MAX_QUESTIONS, Infinity, DEFAULT_MAX_QUESTIONS),
+    sessionLookupRounds: wholeInRange(live(c.sessionLookupRounds), MIN_LOOKUP_ROUNDS, MAX_LOOKUP_ROUNDS, DEFAULT_LOOKUP_ROUNDS),
+    stardeaIdeas: wholeInRange(live(c.stardeaIdeas), MIN_STARDEA_IDEAS, MAX_STARDEA_IDEAS, DEFAULT_STARDEA_IDEAS),
+    stardeaRounds: wholeInRange(live(c.stardeaRounds), MIN_STARDEA_ROUNDS, MAX_STARDEA_ROUNDS, DEFAULT_STARDEA_ROUNDS),
+    stardeaWebSearch: flag(live(c.stardeaWebSearch), DEFAULT_STARDEA_WEB_SEARCH),
   }
 }
 
-function pickMode(value: unknown, fallback: Mode): Mode {
-  return value === 'light' || value === 'standard' ? value : fallback
-}
-
-function wholeAtLeastOne(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : fallback
+/** A whole number within the schema's bounds, else the default (a hand-edited file may hold anything). */
+function wholeInRange(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : fallback
 }
 
 function positive(value: unknown, fallback: number): number {
@@ -136,10 +172,6 @@ function flag(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-function text(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
 /**
  * Apply defaults and reject nonsense without ever throwing at the user.
  *
@@ -149,25 +181,29 @@ function text(value: unknown): string {
  * @returns a complete, safe configuration.
  */
 export function resolveConfig(raw: unknown): ResolvedConfig {
-  const c = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const c = asRecord(raw)
+  // The settings-page fields have one resolver; this snapshot only mirrors it.
+  const settings = readLiveSettings(raw)
+  const effort = trimmedText(c.reasoningEffort)
   return {
-    defaultMode: pickMode(live(c.defaultMode), 'standard'),
-    lightMaxRatio: nonNegative(c.lightMaxRatio, DEFAULT_LIGHT_MAX_RATIO),
-    standardMaxRatio: nonNegative(c.standardMaxRatio, DEFAULT_STANDARD_MAX_RATIO),
-    acceptanceCriteria: flag(c.acceptanceCriteria, false),
-    temperature: nonNegative(c.temperature, 0.3),
-    maxTokens: positive(c.maxTokens, 8192),
-    timeoutMs: positive(c.timeoutMs, 180000),
-    maxInputChars: positive(c.maxInputChars, 20000),
-    contextTurns: nonNegative(c.contextTurns, 3),
-    contextChars: nonNegative(c.contextChars, 6000),
-    smartContext: flag(c.smartContext, true),
-    fidelityGate: flag(c.fidelityGate, true),
-    lengthGate: flag(c.lengthGate, true),
-    provider: text(live(c.provider)),
-    model: text(live(c.model)),
-    reasoningEffort: text(c.reasoningEffort) !== '' ? text(c.reasoningEffort) : 'low',
-    logFailures: flag(c.logFailures, true),
+    defaultMode: settings.mode,
+    lightMaxRatio: nonNegative(c.lightMaxRatio, DEFAULTS.lightMaxRatio),
+    standardMaxRatio: nonNegative(c.standardMaxRatio, DEFAULTS.standardMaxRatio),
+    acceptanceCriteria: flag(c.acceptanceCriteria, DEFAULTS.acceptanceCriteria),
+    temperature: nonNegative(c.temperature, DEFAULTS.temperature),
+    maxTokens: positive(c.maxTokens, DEFAULTS.maxTokens),
+    timeoutMs: positive(c.timeoutMs, DEFAULTS.timeoutMs),
+    maxInputChars: positive(c.maxInputChars, DEFAULTS.maxInputChars),
+    contextTurns: nonNegative(c.contextTurns, DEFAULTS.contextTurns),
+    contextChars: nonNegative(c.contextChars, DEFAULTS.contextChars),
+    smartContext: flag(c.smartContext, DEFAULTS.smartContext),
+    fidelityGate: flag(c.fidelityGate, DEFAULTS.fidelityGate),
+    lengthGate: flag(c.lengthGate, DEFAULTS.lengthGate),
+    knowledgeChars: nonNegative(c.knowledgeChars, DEFAULTS.knowledgeChars),
+    provider: settings.provider,
+    model: settings.model,
+    reasoningEffort: effort !== '' ? effort : DEFAULTS.reasoningEffort,
+    logFailures: flag(c.logFailures, DEFAULTS.logFailures),
   }
 }
 

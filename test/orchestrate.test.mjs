@@ -42,6 +42,8 @@ function stubLlm(script) {
 
 const call = (over = {}) => ({ draft: '把 src/a.ts 的 maxRatioFor 改成 2.5', sessionId: '', mode: 'standard', signal: new AbortController().signal, ...over })
 const deps = (llm, over = {}) => ({ llm, selection: { provider: 'p', model: 'm' }, lastRoute: null, ...over })
+/** Text of a request's latest user turn: the repair is appended after the reply it repairs. */
+const lastUserText = (call) => call.messages.filter((m) => m.role === 'user').at(-1).content[0].text
 
 // ---------------------------------------------------------------- success
 
@@ -119,8 +121,8 @@ test('an inflated rewrite is sent back once with an explicit character budget', 
   assert.equal(llm.calls.length, 2)
   // budget = max(MIN_BUDGET_CHARS, floor(draftChars * 2.5)) — the floor governs here
   const budget = 600
-  assert.match(llm.calls[1].messages[0].content[0].text, /too long/)
-  assert.match(llm.calls[1].messages[0].content[0].text, new RegExp('budget of ' + String(budget)))
+  assert.match(lastUserText(llm.calls[1]), /too long/)
+  assert.match(lastUserText(llm.calls[1]), new RegExp('budget of ' + String(budget)))
 })
 
 test('a rewrite that stays over the ceiling is refused and the draft kept', async () => {
@@ -150,7 +152,7 @@ test('the repair call carries both complaints at once', async () => {
     { text: '请把 src/a.ts 中的 maxRatioFor 改为 2.5。' },
   ])
   await improveDraft(deps(llm), CAPPED, call())
-  const body = llm.calls[1].messages[0].content[0].text
+  const body = lastUserText(llm.calls[1])
   assert.match(body, /too long/)
   assert.match(body, /DROPPED/)
 })

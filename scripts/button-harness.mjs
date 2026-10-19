@@ -23,17 +23,8 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const React = require('react')
 const { renderToStaticMarkup } = require('react-dom/server')
 
-const ZH = {
-  modeLight: '轻', modeStandard: '标准',
-  buttonAria: '把草稿改写为更清晰、更贴 Agent 执行的提示词',
-  buttonTitle: '一键增强提示词（直接替换，可撤回）',
-  buttonTitleBusy: '正在增强…点击取消',
-  buttonTitleCommand: '一键增强提示词（保留斜杠命令前缀，只改写正文）',
-  commandOnlyTitle: '斜杠命令后还没有正文，无可改写内容',
-  modeSwitchTitle: '切换档位',
-  modeLightHint: '轻档：只去废话、消歧义，几乎不改结构',
-  modeStandardHint: '标准档：结构化重述，让 Agent 能直接执行',
-}
+// The plugin's own zh copy, captured from its locale registration rather than re-typed.
+let ZH = {}
 
 let captured = null
 const styles = []
@@ -66,7 +57,7 @@ mod.apply({
     inject: (_seat, fn) => { const it = fn(); if (it !== undefined && typeof it.next === 'function') it.next(); return () => {} },
     register: (options, component) => { registered.push({ options, component }); return () => {} },
   },
-  locale: { register: () => () => {}, bind: () => (key) => ZH[key] ?? key },
+  locale: { register: (_namespace, dicts) => { ZH = dicts.zh; return () => {} }, bind: () => (key) => ZH[key] ?? key },
   effect: (fn) => fn(),
   get: () => undefined,
 })

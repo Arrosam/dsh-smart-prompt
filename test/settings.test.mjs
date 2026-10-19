@@ -16,6 +16,7 @@ test('the settings-page fields are volatile, everything else stays file-only', (
 test('settings defaults: standard mode, conversation model, no dedicated route', () => {
   assert.deepEqual(readLiveSettings(Config({})), {
     mode: 'standard', modelSource: 'conversation', provider: '', model: '', reasoningEffort: '', maxQuestions: 5,
+    sessionLookupRounds: 3, stardeaIdeas: 4, stardeaRounds: 1, stardeaWebSearch: false,
   })
 })
 

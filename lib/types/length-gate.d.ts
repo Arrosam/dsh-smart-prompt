@@ -66,5 +66,14 @@ export declare function overBudget(original: string, enhanced: string, maxRatio:
  * @returns `ok`, or `converge` carrying the character budget for one repair attempt.
  */
 export declare function lengthVerdict(original: string, enhanced: string, maxRatio: number): LengthVerdict;
+/**
+ * The repair instruction for a rewrite over its budget, appended to the user message of
+ * the single repair call.
+ *
+ * @param actualChars - the rewrite's length.
+ * @param charBudget - the budget it exceeded.
+ * @returns the instruction text.
+ */
+export declare function lengthRepairClause(actualChars: number, charBudget: number): string;
 /** Round for display: 1.44 -> "1.4x". */
 export declare function formatRatio(ratio: number): string;

@@ -48,6 +48,10 @@ jobs:
           test -f prompts/standard.md
           test -f prompts/questions.md
           test -f prompts/answers.md
+          test -f prompts/session-lookup.md
+          test -f prompts/attachments.md
+          test -f prompts/stardea.md
+          test -f prompts/knowledge-update.md
           node --check lib/client.js
           node -e "import('./lib/index.js').then((m) => {
             if (m.name !== 'dsh-smart-prompt') throw new Error('unexpected plugin name: ' + m.name)

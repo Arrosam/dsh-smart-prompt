@@ -245,6 +245,7 @@ Set it in the profile's `cordis.patch.yml`:
         contextTurns: 3            # 0 disables history
         contextChars: 6000
         smartContext: true
+        knowledgeChars: 4000       # SMART-PROMPT.md size limit; 0 turns it off
         fidelityGate: true
         lengthGate: true
         provider: ''               # set together with model to override the session model

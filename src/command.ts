@@ -25,6 +25,8 @@ export interface CommandSplit {
 
 /** `/name` — letters, digits, underscore, hyphen; the shape the composer claims. */
 const COMMAND_RE = /^(\s*)\/([A-Za-z0-9_][A-Za-z0-9_-]*)([ \t]*)([\s\S]*)$/
+/** Only slashes: a command still being typed, or stray slashes after one. */
+const BARE_SLASHES_RE = /^\/+$/
 
 /**
  * Split a draft into its command prefix and its body.
@@ -43,7 +45,7 @@ export function splitCommand(draft: string): CommandSplit {
     // A bare run of slashes (the user is still typing the command): a command with
     // no name and no body — nothing to rewrite.
     const bare = text.trim()
-    if (/^\/+$/.test(bare)) return { prefix: bare, command: bare, body: '' }
+    if (BARE_SLASHES_RE.test(bare)) return { prefix: bare, command: bare, body: '' }
     return { prefix: '', command: '', body: bare }
   }
 
@@ -56,7 +58,7 @@ export function splitCommand(draft: string): CommandSplit {
   const body = rest.trim()
 
   // `/name` alone, or a stray run of slashes: a command with nothing to rewrite.
-  if (body === '' || /^\/+$/.test(body)) {
+  if (body === '' || BARE_SLASHES_RE.test(body)) {
     return { prefix: lead + '/' + name, command: '/' + name, body: '' }
   }
   // A command glued to its own name (`/bugfix/foo`) is not this shape at all.

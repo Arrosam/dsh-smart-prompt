@@ -33,7 +33,8 @@ function stubAsk(reply) {
   return { asked, askUser }
 }
 
-const userText = (call) => call.messages[0].content.map((p) => p.text ?? '').join('') || String(call.messages[0].content)
+/** Text of a request's latest user turn: the answers rewrite is appended after the first reply. */
+const lastUserText = (call) => call.messages.filter((m) => m.role === 'user').at(-1).content.map((p) => p.text ?? '').join('')
 const systemOf = (call) => JSON.stringify(call.system ?? call.messages)
 
 const DRAFT = '给那个接口加上限流'
@@ -58,7 +59,7 @@ test('missing information: the user is asked, and a second rewrite adds the answ
   assert.equal(out.ok, true)
   assert.deepEqual(ask.asked[0].map((q) => q.question), ['是哪个接口？', '限流阈值是多少？'])
   assert.equal(llm.calls.length, 2)
-  const second = userText(llm.calls[1])
+  const second = lastUserText(llm.calls[1])
   assert.match(second, /<user_answers>[\s\S]*\/api\/login[\s\S]*每分钟 100 次[\s\S]*<\/user_answers>/)
   assert.match(systemOf(llm.calls[1]), /I don't know|don't know/, 'the answers prompt covers unknown answers')
   assert.equal(out.text.includes('missing_info'), false)
@@ -72,7 +73,7 @@ test('an "I don\'t know" answer is passed on so the rewrite can tell the agent t
   const ask = stubAsk({ answers: [{ id: 'q1', selected: [], custom: "I don't know" }, { id: 'q2', selected: [] }] })
   const out = await run(llm, ask)
   assert.equal(out.ok, true)
-  assert.match(userText(llm.calls[1]), /I don't know/)
+  assert.match(lastUserText(llm.calls[1]), /I don't know/)
   assert.deepEqual(out.meta.questions, { asked: 2, answered: 1 }, 'the skipped question is not an answer')
 })
 

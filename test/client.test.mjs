@@ -113,8 +113,9 @@ test('the built bundle registers exactly the two composer entries under the righ
   assert.deepEqual(registered.map((r) => r.options.id), ['dsh-smart-prompt-button', 'dsh-smart-prompt-bar'])
   for (const entry of registered) {
     assert.equal(entry.options.locale, 'dsh-smart-prompt', 'every entry is localizable')
-    assert.deepEqual(entry.options.inject('s9'), { sessionId: 's9' }, 'the session id reaches the component')
+    assert.equal(entry.options.inject('s9').sessionId, 's9', 'the session id reaches the component')
   }
+  assert.equal(typeof registered[0].options.inject('s9').serializeAttachments, 'function', 'the button also gets the draft-attachment serializer')
 })
 
 test('the button renders enabled with a draft and disabled on an empty composer or a slash command', async () => {
@@ -458,7 +459,9 @@ function fakePrimitives() {
   }
   const SettingsForm = (props) => React.createElement('form', { 'data-invalid': String(props.state.invalid) }, props.children)
   const SegmentedControl = (props) => React.createElement('div', { 'data-segmented': props.id, 'data-value': props.value })
-  return { SettingsFormModel, settingsTextField: (field) => ({ field }), settingsNumberField: (field) => ({ field }), SettingsForm, SegmentedControl }
+  // Required since the Stardea web-search row (0.13).
+  const Switch = (props) => React.createElement('button', { role: 'switch', 'aria-checked': props.checked, 'aria-label': props.label, disabled: props.disabled, onClick: () => props.onChange(!props.checked) })
+  return { SettingsFormModel, settingsTextField: (field) => ({ field }), settingsNumberField: (field) => ({ field }), SettingsForm, SegmentedControl, Switch }
 }
 
 async function bootWithSettings(value) {
@@ -536,7 +539,8 @@ test('choosing a dedicated model stages provider, model and its default effort',
 test('the follow-up question cap is editable and only whole numbers of at least 1 can be saved', async () => {
   const entry = await bootWithSettings({ defaultMode: 'standard', modelSource: 'conversation' })
   const { face, store, renderer, rerender } = await mountSection(entry)
-  const input = () => renderer.root.find((n) => n.type === 'input' && n.props.type === 'number')
+  // The question cap is the first of the section's number fields.
+  const input = () => renderer.root.findAll((n) => n.type === 'input' && n.props.type === 'number')[0]
   assert.equal(input().props.placeholder, '5', 'an empty field means the default of 5')
   for (const [text, invalid] of [['3', false], ['0', true], ['2.5', true], ['', false]]) {
     await TestRenderer.act(async () => { face.setMaxQuestions(text) })
@@ -551,12 +555,16 @@ test('the settings section appears when configForms is provided after the plugin
   const scope = { getSnapshot: () => ({ status: 'ready', value: {}, writable: true }), subscribe: () => () => {} }
   const forms = { get: () => scope, whileServed: (_ns, register) => register() }
   // As in cordis: ctx.get finds nothing yet; ctx.inject runs its callback once the service exists.
+  // The plugin may wait for other services too (uiSession for the follow-up panel); only the
+  // configForms wait matters here, and those other services never arrive in this test.
   let provide = null
   ctx.inject = (names, apply) => {
+    if (!names.includes('configForms')) return
     assert.deepEqual(names, ['configForms'])
     provide = () => apply({ ...ctx, get: (name) => (name === 'configForms' ? forms : undefined) })
   }
   await TestRenderer.act(async () => { module.apply(ctx) })
+  assert.notEqual(provide, null, 'the plugin waits for configForms')
   assert.equal(registered.some((r) => r.options.name === 'plugins.bundle.config'), false, 'not before the service exists')
   await TestRenderer.act(async () => { provide() })
   assert.equal(registered.some((r) => r.options.name === 'plugins.bundle.config'), true, 'registered once it is provided')

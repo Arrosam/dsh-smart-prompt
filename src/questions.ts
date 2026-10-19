@@ -2,8 +2,8 @@
  * Follow-up questions about missing information.
  *
  * The first rewrite call may end with a `<missing_info>` block listing what the draft
- * lacks (see `prompts/questions.md`). The orchestrator asks those questions through the
- * host's ask-user seam, then rewrites once more with the answers. Kept pure: parsing and
+ * lacks (see `prompts/questions.md`). The orchestrator asks those questions in the plugin's
+ * own follow-up panel, then rewrites once more with the answers. Kept pure: parsing and
  * formatting only, no host access.
  *
  * @module dsh-smart-prompt/questions
@@ -59,16 +59,25 @@ export interface AnsweredQuestion {
   readonly answer: string
 }
 
-/** The ask-user seam's answer shape (`@deepseek-ai/dsh-user-questions`). */
+/**
+ * An answer batch, in the shape of DSH's ask-user seam (`@deepseek-ai/dsh-user-questions`),
+ * which the follow-up panel's answers keep: `selected` holds the picked idea texts.
+ */
 export interface SeamAnswer {
   readonly answers?: readonly { readonly id?: unknown; readonly selected?: unknown; readonly custom?: unknown }[]
 }
 
+/** Marker of one part of an answer made of several parts. */
+const PART_BULLET = '- '
+
 /**
  * Pair the asked questions with the user's answers, dropping skipped ones.
  *
+ * An answer may combine ideas the user picked with their own words (Stardea): every part is
+ * kept, picked ideas first. One part is used as it is; several are listed one per line.
+ *
  * @param questions - questions in ask order.
- * @param answer - the seam's reply.
+ * @param answer - the answer UI's reply.
  * @returns the answered questions, in ask order.
  */
 export function answeredQuestions(questions: readonly string[], answer: SeamAnswer): AnsweredQuestion[] {
@@ -77,9 +86,10 @@ export function answeredQuestions(questions: readonly string[], answer: SeamAnsw
     const item = answer.answers?.find((entry) => entry.id === questionId(index))
     if (item === undefined) return
     const custom = typeof item.custom === 'string' ? item.custom.trim() : ''
-    const selected = Array.isArray(item.selected) ? item.selected.filter((s): s is string => typeof s === 'string' && s !== '') : []
-    const text = custom !== '' ? custom : selected.join(', ')
-    if (text !== '') out.push({ question, answer: text })
+    const selected = Array.isArray(item.selected) ? item.selected.filter((s): s is string => typeof s === 'string' && s.trim() !== '').map((s) => s.trim()) : []
+    const parts = custom !== '' ? [...selected, custom] : selected
+    if (parts.length === 0) return
+    out.push({ question, answer: parts.length === 1 ? parts[0]! : parts.map((part) => PART_BULLET + part).join('\n') })
   })
   return out
 }
@@ -92,7 +102,8 @@ export function answeredQuestions(questions: readonly string[], answer: SeamAnsw
  */
 export function formatAnswers(answered: readonly AnsweredQuestion[]): string {
   if (answered.length === 0) return ''
-  // The answers are user text inside a frame: they must not be able to close it.
-  const lines = answered.map((a) => 'Q: ' + escapeClosingTag(a.question) + '\nA: ' + escapeClosingTag(a.answer))
+  // The answers are user text inside a frame: they must not be able to close it. An answer
+  // made of several parts is a list, which starts on its own line.
+  const lines = answered.map((a) => 'Q: ' + escapeClosingTag(a.question) + '\nA:' + (a.answer.includes('\n') ? '\n' : ' ') + escapeClosingTag(a.answer))
   return '<user_answers>\n' + lines.join('\n\n') + '\n</user_answers>'
 }

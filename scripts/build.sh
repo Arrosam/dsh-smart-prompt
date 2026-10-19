@@ -47,13 +47,7 @@ if [ "$HAVE_CHECKOUT" = 1 ]; then
   mk_link node_modules/@types/node "$CHECKOUT/node_modules/@types/node"
   STD_SCHEMA=$(find "$CHECKOUT/node_modules/.pnpm" -maxdepth 1 -type d -iname '@standard-schema+spec@*' 2>/dev/null | head -1)
   if [ -n "$STD_SCHEMA" ]; then
-    node -e "
-      const fs = require('fs');
-      const path = require('path');
-      fs.rmSync('node_modules/@standard-schema', { recursive: true, force: true });
-      fs.mkdirSync('node_modules/@standard-schema', { recursive: true });
-      fs.symlinkSync(path.resolve(process.argv[1]), path.resolve('node_modules/@standard-schema/spec'), process.platform === 'win32' ? 'junction' : 'dir');
-    " "$STD_SCHEMA/node_modules/@standard-schema/spec"
+    mk_link node_modules/@standard-schema/spec "$STD_SCHEMA/node_modules/@standard-schema/spec"
   fi
   echo "=== Compiling src to lib (checkout) ==="
   "$TSC" -p tsconfig.json

@@ -87,6 +87,20 @@ export function lengthVerdict(original: string, enhanced: string, maxRatio: numb
   return { kind: 'converge', ratio, charBudget: budget }
 }
 
+/**
+ * The repair instruction for a rewrite over its budget, appended to the user message of
+ * the single repair call.
+ *
+ * @param actualChars - the rewrite's length.
+ * @param charBudget - the budget it exceeded.
+ * @returns the instruction text.
+ */
+export function lengthRepairClause(actualChars: number, charBudget: number): string {
+  return '\nYour previous rewrite was too long: ' + String(actualChars)
+    + ' characters against a budget of ' + String(charBudget)
+    + '. Rewrite it again, shorter, without dropping any content.'
+}
+
 /** Round for display: 1.44 -> "1.4x". */
 export function formatRatio(ratio: number): string {
   return (Math.round(ratio * 10) / 10).toFixed(1) + 'x'
