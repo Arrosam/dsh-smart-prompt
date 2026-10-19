@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.0
+
+Includes everything from 0.11.0 and 0.12.0 below, which were never released separately.
+
+- **Workspace knowledge (`SMART-PROMPT.md`)**: every refine reads `SMART-PROMPT.md` at the session's workspace root and puts it at the start of the request, the way `AGENTS.md` is given to agents. After a successful refine, one more call in the same conversation updates the file (or creates it) with lasting knowledge about the workspace: what the project is, your vocabulary and shorthand, files and commands you keep mentioning, and standing preferences. It never records the current request, progress, guesses or secrets. The update runs after the result is shown and its failures are ignored. Limit: `knowledgeChars` (default 4000; 0 turns it off). A file over the limit is read clipped and never rewritten.
+- **Last turn always included**: the last exchange of the conversation (your message and the assistant's final reply, without tool calls or thinking) is now sent with every refine, not only with drafts like "do the same". The status shows `context used`.
+
+### From 0.12.0
+
+- **Stardea (星念)**: every follow-up question has a **Stardea** button. A click suggests answers, found through a search of the current conversation, the model's own proposals and, if turned on, DSH's web search. Each suggestion is labeled with its source. Clicking again adds different suggestions below the earlier ones.
+- **Stardea settings**: three new rows on the settings page. **Stardea ideas per click**: 1 to 8, default 4. **Stardea search rounds**: the most search rounds per click, 0 to 10, default 1; with 0, Stardea only proposes its own ideas. **Stardea web search**: off by default. **Session lookup rounds** now limits only the rewrite.
+- **New question panel**: follow-up questions now open in the plugin's own panel in place of the composer, instead of DSH's question card. The panel shows your original draft, so you can see what you wrote. You can tick one or more suggestions, with or without your own words. **Skip** keeps the first rewrite with its `(TBD: …)` notes, and **×** cancels the refine.
+- **Answers keep every part**: an answer made of ticked suggestions and your own words passes all of them to the rewrite. Before, your own words replaced the ticked choice.
+- **Token report**: the note after a refine shows its tokens as `input(cached) - output`: input that missed the cache, input read from the cache, and output, over every model call including Stardea. It appears only when the provider reports token use.
+- **Cheaper repeated calls**: all model calls of one refine now continue a single conversation with the same system prompt and tools. Each call starts with the previous request unchanged, so providers with prompt caching bill the repeated part as cache hits. Earlier lookup results stay available to later calls. Session lookups are now tool results instead of a `<session_lookup>` block. If the model rejects tools, the refine continues without them and the results are written into the request.
+
+### From 0.11.0
+
+- **Attachments**: images and files attached in the composer are now sent to the refining model with the draft. Text files are read, up to the first 20,000 characters of each. If a file is still uploading, the refine stops and asks you to try again.
+- **Earlier images**: when session context is included, the images you attached to those earlier messages are sent too. Which messages are included has not changed.
+- **Session lookups**: when the draft depends on something said earlier, the refining model can search the conversation and read earlier messages: your messages and the assistant's replies only. Set **Session lookup rounds** in the plugin settings: 0 to 10, default 3. 0 turns lookups off. Each round is one more model call. If the model doesn't support tools, the refine continues without lookups.
+- **Clearer failures**: when the model call itself fails, the error bubble now says the call failed instead of "the model returned nothing".
+- **Request size**: the improve endpoint's body limit now scales with DSH's per-message image limit, so drafts with images fit.
+
 ## 0.10.1
 
 - **Fix**: after a refine, switching to another session and back showed the success bubble again, even after it had hidden. It now shows once per refine. Error bubbles are unchanged.
