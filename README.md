@@ -1,4 +1,4 @@
-# dsh-smart-prompt
+# dsh-smart-prompt [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 A DSH plugin that turns a rough composer draft into a clear prompt an agent can act on, in one click.
 
