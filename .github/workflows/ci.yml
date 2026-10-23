@@ -46,6 +46,7 @@ jobs:
           test -f prompts/discipline.md
           test -f prompts/light.md
           test -f prompts/standard.md
+          test -f prompts/detailed.md
           test -f prompts/questions.md
           test -f prompts/answers.md
           test -f prompts/session-lookup.md

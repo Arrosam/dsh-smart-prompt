@@ -63,6 +63,13 @@ type NumberKey = keyof typeof NUMBER_FIELDS
 /** The number fields in display order. */
 const NUMBER_KEYS = Object.keys(NUMBER_FIELDS) as NumberKey[]
 
+/** Settings-page label and hint of each mode; the display order comes from MODE_VALUES. */
+const MODE_COPY: Record<Mode, { readonly label: string; readonly hint: string }> = {
+  standard: { label: 'modeStandard', hint: 'modeStandardHint' },
+  detailed: { label: 'modeDetailed', hint: 'modeDetailedHint' },
+  light: { label: 'modeLight', hint: 'modeLightHint' },
+}
+
 /**
  * Draft text of an on/off field. The host form model stages every field as text and ships
  * only text and number specs, so a switch stages one of these and {@link settingsFlagField}
@@ -348,13 +355,13 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
       onSave: props.save,
       onDiscard: props.discard,
     },
-    row(t('settingsMode'), state.mode === 'light' ? t('modeLightHint') : t('modeStandardHint'),
+    row(t('settingsMode'), t(MODE_COPY[state.mode].hint),
       React.createElement(SegmentedControl, {
         id: baseId + '-mode',
         value: state.mode,
         label: t('settingsMode'),
         disabled,
-        options: [{ value: 'standard', label: t('modeStandard') }, { value: 'light', label: t('modeLight') }],
+        options: MODE_VALUES.map((value) => ({ value, label: t(MODE_COPY[value].label) })),
         onChange: (next) => { props.setMode(next as Mode) },
       })),
     row(t('settingsModel'), state.source === 'dedicated' ? t('settingsModelDedicatedHint') : t('settingsModelConversationHint'),

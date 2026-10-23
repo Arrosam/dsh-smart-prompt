@@ -111,7 +111,8 @@ test('RR-02 [EP] GET config with and without trailing slash returns the public c
     assert.equal(reply.status, 200, path)
     assert.match(reply.headers['content-type'], /application\/json/)
     assert.deepEqual(reply.json, {
-      ok: true, defaultMode: 'light', modes: ['standard', 'light'], maxRatio: { light: 3, standard: 0 }, smartContext: false,
+      ok: true, defaultMode: 'light', modes: ['standard', 'detailed', 'light'],
+      maxRatio: { light: 3, standard: 0, detailed: 0 }, smartContext: false,
     }, path)
   }
 })

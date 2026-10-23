@@ -57,7 +57,7 @@ export interface ResolvedConfig {
 }
 /** Loader schema — every key optional. `.volatile()` is what puts a field on the DSH settings page (0.2.0+). */
 export declare const Config: z<Schemastery.ObjectS<NoInfer<{
-    defaultMode: z<"standard" | "light", "standard" | "light", "volatile-defined">;
+    defaultMode: z<"standard" | "detailed" | "light", "standard" | "detailed" | "light", "volatile-defined">;
     modelSource: z<"conversation" | "dedicated", "conversation" | "dedicated", "volatile-defined">;
     lightMaxRatio: z<number, number, "defined">;
     standardMaxRatio: z<number, number, "defined">;
@@ -83,7 +83,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     reasoningEffort: z<string, string, "defined">;
     logFailures: z<boolean, boolean, "defined">;
 }>>, Schemastery.ObjectT<NoInfer<{
-    defaultMode: z<"standard" | "light", "standard" | "light", "volatile-defined">;
+    defaultMode: z<"standard" | "detailed" | "light", "standard" | "detailed" | "light", "volatile-defined">;
     modelSource: z<"conversation" | "dedicated", "conversation" | "dedicated", "volatile-defined">;
     lightMaxRatio: z<number, number, "defined">;
     standardMaxRatio: z<number, number, "defined">;
@@ -125,7 +125,7 @@ export declare function readLiveSettings(raw: unknown): LiveSettings;
  * @returns a complete, safe configuration.
  */
 export declare function resolveConfig(raw: unknown): ResolvedConfig;
-/** Ceiling for one mode. */
+/** Ceiling for one mode. Light has its own; every restructuring mode (standard, detailed) shares standard's. */
 export declare function maxRatioFor(config: ResolvedConfig, mode: Mode): number;
 /** `$DSH_HOME` (honouring an explicit env var) — web processes can disagree with homedir(). */
 export declare function dshHome(): string;

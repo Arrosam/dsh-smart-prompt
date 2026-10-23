@@ -37,6 +37,14 @@ Click ✦ again while it is working to cancel. If anything goes wrong (no model,
 
 Slash commands work too: in `/bugfix <text>` the command stays as is and only the text is rewritten.
 
+### Modes
+
+The improvement method is chosen in **Settings → Plugins → dsh-smart-prompt**:
+
+- **Standard** (default) — restructures the draft so an agent can execute it: deliverable, constraints, steps, output format.
+- **详细模式 (Detailed)** — goes further: ordered next steps, the cautions to watch while executing, and the exact standard for every concrete detail. The prompt sets no length target; the bar is that the executing agent never has to guess a detail. It shares Standard's settings, including the optional length ceiling (`standardMaxRatio`, uncapped by default). It never leaves `(TBD: …)` notes: what only you can decide is asked **one question at a time** (see [Follow-up questions](#follow-up-questions)), and once asking ends the remaining gaps are filled with guesses listed under **Guessed details** at the end of the rewrite. When the draft only names a direction instead of a result — a short qualifier like "softer", a request like "give me a sense of…", an analogy like "light like feather", a mood reference like "a vibe of kawaii bass" — it asks what exactly you want and points you at **Stardea (星念)** for candidate answers.
+- **Light** — only removes filler and clears up ambiguity, keeping the draft's structure (at most 2× the draft).
+
 ### Attachments
 
 Images and files attached in the composer are sent to the refining model along with the draft, so "fix the error in this screenshot" or "follow the attached spec" is rewritten with them in view. Text files are read, up to the first 20,000 characters of each. Other files are named but not read. The attachments stay in the composer and still go to the agent when you send. Wait for file uploads to finish before you click ✦.
@@ -48,10 +56,12 @@ When session context is included (see [Session context](#session-context)), imag
 If the draft is missing something only you can answer (which endpoint, what limit, which option), a panel opens in place of the composer with a few short questions. Your original draft is shown at the top of the panel so you can see what you wrote. Answer the questions and the prompt is rewritten again with your answers included.
 
 - Answer "I don't know" and the prompt tells the agent to find it out itself, or to suggest options and carry on with the most reasonable one.
-- **Skip** leaves every question unanswered, and you get the first rewrite with `(TBD: …)` notes for the gaps. A question you leave empty is skipped the same way.
+- **Skip** leaves every question unanswered, and you get the first rewrite with `(TBD: …)` notes for the gaps (Detailed mode guesses instead; see below). A question you leave empty is skipped the same way.
 - **×** closes the panel and cancels the refine. Your draft is not changed.
 - If the request fails after you answered, click **Retry** on the error bubble. Your answers are reused, so you are not asked again.
 - No questions are asked when the draft already has what it needs.
+
+In **Detailed** mode the questions come one at a time. After each answer the prompt is rewritten and, if something only you can decide is still missing, the next question opens, until nothing is missing or **Follow-up questions** (the limit, default 5) have been asked in total. Then, and also when you click **Skip** or questions cannot be asked at all (limit 0, or an API request without a session), the remaining gaps are filled with guesses, and each guess is listed under **Guessed details** (`## 猜测补充` for a Chinese draft) at the end of the rewrite, so you can see and correct them. **×** still cancels without changing your draft.
 
 ### Stardea (星念)
 
@@ -71,7 +81,7 @@ All model calls of one refine continue a single conversation, so each call start
 
 - **Nothing important is lost.** Before rewriting, the plugin lists the hard facts in your draft: file paths, identifiers, numbers and versions, URLs, `code`, and @mentions. It then checks that each one survived. If the model dropped one, it gets one more try. If a fact is still missing, it is added back at the end under "Preserved original details".
 - **Nothing is invented.** A vague draft is not padded with made-up requirements. Gaps are marked `(TBD: …)` instead.
-- **No runaway length in Light mode.** A Light rewrite may grow to 2× the draft, and always at least 600 characters. A longer result gets one chance to shorten. If it is still too long, it is discarded and your draft is kept. Standard mode has no length cap by default (set `standardMaxRatio` to add one).
+- **No runaway length in Light mode.** A Light rewrite may grow to 2× the draft, and always at least 600 characters. A longer result gets one chance to shorten. If it is still too long, it is discarded and your draft is kept. Standard and Detailed modes have no length cap by default (set `standardMaxRatio` to add one).
 - **Few model calls per click**: the rewrite, a second rewrite with your answers (only when you answered follow-up questions), and one repair. Each lookup round adds one call, up to **Session lookup rounds** (default 3). Each Stardea click adds one call, plus up to **Stardea search rounds** more (default 1).
 
 ## Settings
@@ -80,7 +90,7 @@ Open **Settings → Plugins → dsh-smart-prompt** (DSH 0.2 or later).
 
 | Setting | Options |
 |---|---|
-| **Improvement method** | **Standard**: restructures the draft so an agent can execute it directly. **Light**: only removes filler and clears up ambiguity. |
+| **Improvement method** | **Standard**: restructures the draft so an agent can execute it directly. **Detailed (详细模式)**: writes out the ordered next steps, the cautions to watch while executing, and the exact standard for every concrete detail — the prompt sets no length target, so the agent never has to guess one. **Light**: only removes filler and clears up ambiguity. |
 | **Model used to improve prompts** | **Conversation model**: uses the model chosen in the current conversation, or your DSH default. **Dedicated model**: always uses the model you pick here, with its own reasoning effort. |
 | **Follow-up questions** | The most questions to ask when the draft is missing information. Default 5. |
 | **Session lookup rounds** | The most rounds of searching and reading this conversation while rewriting, when the draft depends on something said earlier. 0 to 10, default 3. 0 turns lookups off. |
@@ -108,7 +118,7 @@ Other options live in the profile's `cordis.patch.yml`. All are optional; the va
       config:
         lightMaxRatio: 2
         standardMaxRatio: 0        # 0 = no length cap
-        acceptanceCriteria: false  # Standard: add a checkable "done when" line
+        acceptanceCriteria: false  # Standard/Detailed: add a checkable "done when" line
         temperature: 0.3
         maxTokens: 8192
         timeoutMs: 180000
@@ -128,7 +138,7 @@ Other options live in the profile's `cordis.patch.yml`. All are optional; the va
 The rewriting instructions are plain Markdown files in `prompts/`:
 
 - `discipline.md`: the shared rules.
-- `standard.md` and `light.md`: one file per mode.
+- `standard.md`, `detailed.md` and `light.md`: one file per mode.
 - `questions.md`: when and how to ask follow-up questions.
 - `answers.md`: how to fold your answers in, including "I don't know".
 - `attachments.md`: how to use the draft's attachments and earlier images.

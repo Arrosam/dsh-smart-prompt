@@ -8,8 +8,12 @@
  * @module dsh-smart-prompt/settings-fields
  */
 
-/** Settings-page mode choices, in display order. */
-export const MODE_VALUES = ['standard', 'light'] as const
+/**
+ * Settings-page mode choices, in display order. `detailed` is `standard` with a different
+ * prompt template only, so every mode-keyed decision outside the template treats it as
+ * `standard` (same length ceiling, same optional acceptance clause).
+ */
+export const MODE_VALUES = ['standard', 'detailed', 'light'] as const
 /** Settings-page model-source choices, in display order. */
 export const MODEL_SOURCE_VALUES = ['conversation', 'dedicated'] as const
 

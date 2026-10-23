@@ -58,6 +58,27 @@ export declare function stardeaPrompt(maxIdeas: number, maxRounds: number): stri
  */
 export declare function answersTurn(answersBlock: string): string;
 /**
+ * The user turn sent when the user skipped the questions and the mode fills the gaps
+ * with guesses (detailed); its {@link followUpStatus} note says asking has ended.
+ */
+export declare function skippedTurn(): string;
+/** Where a refinement's follow-up questions stand, as told to the model in detailed mode. */
+export type FollowUpState = {
+    readonly kind: 'open';
+    readonly questionsLeft: number;
+} | {
+    readonly kind: 'limit' | 'skipped' | 'unavailable';
+};
+/**
+ * The note that ends every detailed-mode user turn, saying whether the model may still ask.
+ * The model cannot count the questions of earlier rounds reliably, so the orchestrator,
+ * which owns the question cap, states it on every turn.
+ *
+ * @param state - where the questions stand.
+ * @returns the framed note.
+ */
+export declare function followUpStatus(state: FollowUpState): string;
+/**
  * The user turn asking for ideas for one follow-up question.
  *
  * @param questionId - the question's id.

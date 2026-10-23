@@ -207,7 +207,7 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
   }
 }
 
-/** Ceiling for one mode. */
+/** Ceiling for one mode. Light has its own; every restructuring mode (standard, detailed) shares standard's. */
 export function maxRatioFor(config: ResolvedConfig, mode: Mode): number {
   return mode === 'light' ? config.lightMaxRatio : config.standardMaxRatio
 }

@@ -27,7 +27,7 @@
  */
 
 import z from '@deepseek-ai/schemastery'
-import { MODE_VALUES, readLiveSettings, resolveConfig, type LiveSettings, type Mode, type ResolvedConfig } from './config.js'
+import { MODE_VALUES, maxRatioFor, readLiveSettings, resolveConfig, type LiveSettings, type Mode, type ResolvedConfig } from './config.js'
 import { improveDraft, ERR, type ImproveDeps, type ImproveOutcome, type SessionsFace } from './orchestrate.js'
 import type { LlmFace, Route } from './llm-call.js'
 import { AnswerMemory } from './answer-memory.js'
@@ -270,7 +270,7 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
           ok: true,
           defaultMode: readLiveSettings(rawConfig).mode,
           modes: MODE_VALUES,
-          maxRatio: { light: config.lightMaxRatio, standard: config.standardMaxRatio },
+          maxRatio: Object.fromEntries(MODE_VALUES.map((mode) => [mode, maxRatioFor(config, mode)])),
           smartContext: config.smartContext,
         })
         return

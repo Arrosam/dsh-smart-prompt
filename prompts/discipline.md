@@ -24,7 +24,9 @@ You are NOT answering it, NOT executing it, NOT explaining it.
 9. Do not widen, narrow, or redirect the scope. Do not turn a question into an unrelated task:
    if the draft asks a question, the rewrite still asks that question.
 10. If the draft is already precise, make only light cleanup. Changing nothing meaningful is a
-    valid and correct outcome.
+    valid and correct outcome — except that a mode template which explicitly requires a full
+    execution specification may require that structure even then: its sections may be short and
+    may only restate what the draft already supports, but they may not be dropped.
 
 ## Language and tone
 11. Write the rewrite in the SAME language as the draft (Chinese in → Chinese out; English in →
