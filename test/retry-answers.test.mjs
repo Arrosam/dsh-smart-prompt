@@ -120,14 +120,17 @@ test('RA-02 [State] forgetting one session leaves another intact', () => {
 
 // ---------------------------------------------------------------- reuse after each failure kind
 
+// RA-03 and RA-06 need a card holding both questions: light keeps that single round (standard
+// and detailed ask one question per card; their memo retries are in detailed-rounds and
+// standard-rounds tests).
 test('RA-03 [EP upstream] after the folding call fails, the retry folds the previous answers without asking', async () => {
   const memory = new AnswerMemory()
-  const first = await failAfterAnswering(memory)
+  const first = await failAfterAnswering(memory, { mode: 'light' })
   assert.equal(first.code, 'UPSTREAM')
 
   const llm = stubLlm([FOLDED])
   const ask = stubAsk(BOTH)
-  const out = await run({ llm, ask, answers: memory })
+  const out = await run({ llm, ask, answers: memory, mode: 'light' })
   assert.equal(out.ok, true, JSON.stringify(out))
   assertReused(llm, ask)
   const body = userText(llm.calls[0])
@@ -179,11 +182,11 @@ test('RA-05 [EP abort] after the request is aborted during the folding call, the
 
 test('RA-06 [EP partial] a partially answered card is reused with its original counts', async () => {
   const memory = new AnswerMemory()
-  await failAfterAnswering(memory, { reply: ONE })
+  await failAfterAnswering(memory, { reply: ONE, mode: 'light' })
 
   const llm = stubLlm([FOLDED])
   const ask = stubAsk(BOTH)
-  const out = await run({ llm, ask, answers: memory })
+  const out = await run({ llm, ask, answers: memory, mode: 'light' })
   assert.equal(out.ok, true)
   assertReused(llm, ask)
   assert.deepEqual(out.meta.questions, { asked: 2, answered: 1 })

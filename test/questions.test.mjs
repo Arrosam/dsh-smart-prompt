@@ -39,10 +39,13 @@ const systemOf = (call) => JSON.stringify(call.system ?? call.messages)
 
 const DRAFT = '给那个接口加上限流'
 const WITH_GAPS = '给那个接口加上限流。\n- 目标接口：(TBD)\n- 阈值：(TBD)\n<missing_info>\n<question>是哪个接口？</question>\n<question>限流阈值是多少？</question>\n</missing_info>'
+// Light is the mode that keeps the single round of questions (every question in one card,
+// one rewrite with the answers, Skip keeps the first rewrite), so these cases run in light.
+// Standard and detailed ask one question per round: detailed-rounds / standard-rounds tests.
 const run = (llm, ask, over = {}) => improveDraft(
   { llm, selection: { provider: 'p', model: 'm' }, lastRoute: null, askUser: ask?.askUser },
   CFG,
-  { draft: DRAFT, sessionId: 's1', mode: 'standard', signal: new AbortController().signal, maxQuestions: 5, ...over },
+  { draft: DRAFT, sessionId: 's1', mode: 'light', signal: new AbortController().signal, maxQuestions: 5, ...over },
 )
 
 test('parseRewrite splits off the questions, caps them, and strips the block', () => {
@@ -102,6 +105,20 @@ test('no way to ask the user: the model is not invited to list questions', async
   const out = await run(llm, undefined)
   assert.equal(out.ok, true)
   assert.equal(systemOf(llm.calls[0]).includes('missing_info'), false)
+})
+
+test('no way to ask the user in standard: no question allowance, and the turn says questions cannot be asked', async () => {
+  // Standard's own template describes the follow-up rounds, so its system prompt names the
+  // block; what invites questions is the stated cap and the per-turn note (requirement R6).
+  const llm = stubLlm(['给那个接口加上限流。'])
+  const out = await run(llm, undefined, { mode: 'standard' })
+  assert.equal(out.ok, true)
+  assert.doesNotMatch(systemOf(llm.calls[0]), /At most 5 questions|at most 5 /i, 'no question cap is offered')
+  const turn = lastUserText(llm.calls[0])
+  const note = /<follow_up_status>([\s\S]*?)<\/follow_up_status>\s*$/.exec(turn)
+  assert.ok(note !== null, 'the turn ends with a follow-up status note: ' + turn)
+  assert.match(note[1], /cannot (?:ask|be asked)|no (?:more |further )?(?:follow-?up )?questions/i, 'asking is unavailable: ' + note[1])
+  assert.match(note[1], /guess/i, 'the gaps become guesses: ' + note[1])
 })
 
 test('the question cap is passed to the model and enforced', async () => {

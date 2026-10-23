@@ -38,7 +38,7 @@ dsh plugin --profile web remove dsh-smart-prompt   # uninstall
 - **Fidelity gate (the real difference)** — it mechanically **extracts** the draft's hard facts (file paths, file names, identifiers, numbers and versions, URLs, `backticked` code, @references) and **verifies** each one literally survived the rewrite. A missing fact triggers one repair call naming those exact strings; if the model still drops it, a deterministic **re-append** adds a "Preserved original details" block — zero loss. Every other enhancer in the ecosystem just asks the model to "preserve the original details"; none of them checks.
 - **Length gate** — a rewrite over budget (2x in Light, **never below a 600-character absolute floor**; Standard/Detailed are uncapped by default) gets one convergence call carrying an explicit character budget; if it is still over, nothing is written back and the reason is shown.
 - **Quality certificate** — the status bar **shows** `Improved · fidelity 5/5 · 1.0x · 2.2s`: trust at a glance.
-- **Three modes** — **Light** (≤2x, de-filler and disambiguate) / **Standard** (no length cap by default, restructure) / **Detailed (详细模式)** (Standard plus ordered next steps, cautions and the exact standard for every concrete detail; the prompt sets no length target, and the shared `standardMaxRatio` ceiling stays uncapped by default); the mode is chosen in Settings and remembered. Detailed never leaves `(TBD: …)` notes: what only you can decide is asked one question at a time until nothing is missing or the follow-up limit is reached; after that, after **Skip**, or when questions cannot be asked, the remaining gaps are filled with guesses listed under **Guessed details** at the end. Vague asks of any kind — short qualifiers like "softer", requests like "give me a sense of…", analogies like "light like feather", mood references like "a vibe of kawaii bass" — become such questions, with a Stardea hint.
+- **Three modes** — **Light** (≤2x, de-filler and disambiguate) / **Standard** (no length cap by default, restructure) / **Detailed (详细模式)** (Standard plus ordered next steps, cautions and the exact standard for every concrete detail; the prompt sets no length target, and the shared `standardMaxRatio` ceiling stays uncapped by default); the mode is switched by **holding the ✦ star and sliding** along the mode bar that opens above it (Detailed ← Standard → Light, no wrap-around) or chosen in Settings — both change the same saved setting — and the star's icon shows it (a stretched star writing on a page / the ✦ / a lightning bolt). Standard and Detailed never leave `(TBD: …)` notes: what only you can decide is asked one question at a time until nothing is missing or the follow-up limit is reached; after that, after **Skip**, or when questions cannot be asked, the remaining gaps are filled with guesses listed under **Guessed details** at the end. Light keeps a single round: every question at once, and **Skip** keeps the first rewrite. In Detailed, vague asks of any kind — short qualifiers like "softer", requests like "give me a sense of…", analogies like "light like feather", mood references like "a vibe of kawaii bass" — become such questions, with a Stardea hint.
 - **Slash commands supported** — with `/bugfix <body>` the command prefix is **kept verbatim** and only the body is rewritten; the button is disabled only when a command has no body yet.
 - **Cancellable** — **click** ✦ again while it runs to genuinely **abort** the upstream request (`AbortSignal`); the draft stays untouched.
 - **Failure keeps your draft** — no model, timeout, empty output, network error: your input is **never touched**, you just get one readable message.
@@ -63,12 +63,12 @@ No preview-and-compare panel, no voice input, no self-updater, no multi-stage LL
    > 把 `src/host/config.ts` 里的 `maxRatioFor` 改成 `2.5`；用 `pnpm build` 验证一下。
 4. Read the certificate on the status bar above the composer: `已增强 · 保真 5/5 · 1.0x · 2.2s`
 5. **Press**「撤回」(Undo) to **restore** the original — valid for 8 seconds; edit by hand and the bar disappears
-6. **Choose** the improvement method — Standard, Detailed (详细模式) or Light — in **Settings → Plugins → dsh-smart-prompt** (the button itself has no mode switch)
+6. **Switch** the improvement method by **holding the ✦ star** (or sliding it sideways): a capsule mode bar opens above it, floating over the page, with Detailed ← Standard → Light. Slide to a mode and let go; sliding past an end stays there, and Esc or letting go without sliding keeps the mode. The star's icon shows the active mode (a stretched star writing on a page for Detailed, the ✦ for Standard, a lightning bolt for Light). The same setting is under **Improvement method** in **Settings → Plugins → dsh-smart-prompt**, and the two stay in sync. The first time the star appears, a small window above the composer explains the hold-and-slide and the three modes; it shows once and never blocks typing.
 7. **Click** ✦ again to **cancel** a run in progress — the draft stays untouched
 
 ### Usage examples
 
-Real input → output pairs (rows 1–4 were produced by a real model on this machine, see *Real measured examples*; the last two are documented behaviours):
+Real input → output pairs (rows 1–4 were produced by a real model on this machine, rows 3 and 4 before Standard asked follow-up questions one at a time, see *Real measured examples*; the last two are documented behaviours):
 
 | Input | Output |
 |---|---|
@@ -152,7 +152,7 @@ Worst case **5.43:1** (disabled label; WCAG AA wants >= 4.5:1) — the control s
 3. **A wordy English sentence** — Light mode compresses "I was kind of wondering if you could maybe…" into one executable English request.
 4. **A continuation draft** — you discussed an endpoint last turn and now type only "把那个接口加上限流". Smart context carries the recent turns, so the rewrite connects to the plan you already agreed on.
 5. **A mis-click or a result you dislike** — press Undo within 8 seconds. The moment you edit by hand the bar disappears, so your new input is never overwritten.
-6. **A vague draft is never padded** — something like "加个功能" is never invented into a fabricated spec: the discipline layer tells the model to leave it alone, so you get it back unchanged or with explicit (TBD) follow-ups.
+6. **A vague draft is never padded** — something like "加个功能" is never invented into a fabricated spec: the discipline layer tells the model to leave it alone. Light gives it back unchanged or with explicit (TBD) notes; Standard and Detailed ask what you mean, one question at a time, and list every guess they make once asking ends under **Guessed details**.
 7. **A slash command with a long body** — `/bugfix <a rambling account>`: the prefix survives verbatim and only the body becomes a clearly structured investigation request; command parsing is unaffected.
 8. **Script and tool integration** — `POST /dsh-smart-prompt/api/improve` wires the same pipeline into your own scripts, CI or editor tooling, loopback only.
 9. **Mixed Chinese-English drafts** — English paths, function names and versions inside Chinese prose: the fidelity gate treats them as hard facts and keeps them verbatim; no translation pass eats your identifiers.
@@ -166,7 +166,7 @@ Worst case **5.43:1** (disabled label; WCAG AA wants >= 4.5:1) — the control s
 - **Re-append notice** — only when the deterministic fallback fired: `已增强 · 保真 5/5 · 1.4x · 3.1s · 已回灌 src/a.ts`
 - **Preserved-details block** — appended to the rewrite on re-append: `保留原始细节 / Preserved original details:` followed by the exact strings
 - **Failure copy (draft untouched)** — "增强超时（180000ms），原文未改动" / "未找到可用模型：请先在设置里选默认模型" / "增强结果超出长度上限（…），已保留原文"
-- **Mode selection** — chosen in **Settings → Plugins → dsh-smart-prompt** (the button itself has no mode switch and shows no mode label)
+- **Mode selection** — hold the ✦ star and slide along the mode bar (Detailed ← Standard → Light), or choose it in **Settings → Plugins → dsh-smart-prompt**, where a hint under **Improvement method** names the gesture; the star's icon shows the active mode, and a one-time window explains it on first use
 - **Chip state** — a 28px star circle at rest, expanding on hover into a single-purpose glass chip (the left neighbor reflows automatically)
 - **API response** — `POST /api/improve` returns the rewritten body plus certificate fields (fidelity count / length ratio / contextUsed / elapsed), ready for scripts to consume
 - **Cancellation feedback** — after an abort the status bar disappears immediately and the draft is preserved; no dangling timers, no half-written text
@@ -216,6 +216,8 @@ The model is told not to invent requirements when the draft carries none; return
 ```
 
 **Structure added, zero facts invented.** Gaps are marked `(TBD: …)` for you to fill, instead of guessed at.
+
+Examples ③ and ④ were measured before Standard took Detailed's follow-up flow. Standard now asks such gaps one question at a time (here: which endpoint first) instead of writing `(TBD: …)`. When asking ends (follow-up limit reached, **Skip**, or no way to ask, as in an API call without a session), it fills the gaps with guesses and lists each one under `## 猜测补充` (`## Guessed details` for an English draft).
 
 ## Advanced usage
 

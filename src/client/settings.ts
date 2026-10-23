@@ -3,8 +3,8 @@
  *
  * Fields are the host Config's `.volatile()` keys, edited through the host's shared
  * `configForms` entry form and saved together with the host `SettingsForm` (staged:
- * only Save writes). The improvement mode lives here since the composer button lost
- * its switch.
+ * only Save writes). Holding and sliding the composer star also picks the improvement mode
+ * (mode.ts): it writes the same field at once through the same entry form, so the two stay in sync.
  *
  * Host primitives are reached through the runtime `require` the module loader gives the
  * bundle, and described structurally here, so a primitives version skew degrades to "no
@@ -63,8 +63,11 @@ type NumberKey = keyof typeof NUMBER_FIELDS
 /** The number fields in display order. */
 const NUMBER_KEYS = Object.keys(NUMBER_FIELDS) as NumberKey[]
 
-/** Settings-page label and hint of each mode; the display order comes from MODE_VALUES. */
-const MODE_COPY: Record<Mode, { readonly label: string; readonly hint: string }> = {
+/**
+ * Label and description (hint) of each mode; the settings page shows both, the first-use window
+ * the descriptions. The settings page's display order comes from MODE_VALUES.
+ */
+export const MODE_COPY: Readonly<Record<Mode, { readonly label: string; readonly hint: string }>> = {
   standard: { label: 'modeStandard', hint: 'modeStandardHint' },
   detailed: { label: 'modeDetailed', hint: 'modeDetailedHint' },
   light: { label: 'modeLight', hint: 'modeLightHint' },
@@ -315,11 +318,13 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
     const efforts = current?.model.reasoning?.efforts ?? []
     const routeValue = state.provider !== '' && state.model !== '' ? state.provider + ROUTE_SEP + state.model : ''
 
-    const row = (label: string, hint: string, control: React.ReactNode): React.ReactElement =>
+    // `tip`: an optional second line under the hint, for a usage tip rather than a description.
+    const row = (label: string, hint: string, control: React.ReactNode, tip?: string): React.ReactElement =>
       React.createElement('div', { className: 'dip-set-row' },
         React.createElement('div', { className: 'dip-set-text' },
           React.createElement('div', { className: 'dip-set-label' }, label),
-          React.createElement('div', { className: 'dip-set-hint' }, hint)),
+          React.createElement('div', { className: 'dip-set-hint' }, hint),
+          tip !== undefined ? React.createElement('div', { className: 'dip-set-hint dip-set-tip' }, tip) : null),
         React.createElement('div', { className: 'dip-set-control' }, control))
 
     // One whole-number row; every number field shares the same input and validation.
@@ -363,7 +368,9 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
         disabled,
         options: MODE_VALUES.map((value) => ({ value, label: t(MODE_COPY[value].label) })),
         onChange: (next) => { props.setMode(next as Mode) },
-      })),
+      }),
+      // The composer star picks the same saved mode by press-and-slide (see mode.ts).
+      t('settingsModeDragHint')),
     row(t('settingsModel'), state.source === 'dedicated' ? t('settingsModelDedicatedHint') : t('settingsModelConversationHint'),
       React.createElement(SegmentedControl, {
         id: baseId + '-source',

@@ -3,14 +3,21 @@
  *
  * ## Material: a plain capsule in the host's own design tokens
  *
- * The button is a single-purpose control (click = improve), so it carries no mode
- * switch, hover expansion, glow or animated light. It reuses the host's `--dsw-alias-*`
+ * A click improves; holding or sliding the star opens the mode bar (mode.ts), and at rest only the
+ * glyph shows the mode, so the button carries no visible switch, hover expansion, glow or animated
+ * light. It reuses the host's `--dsw-alias-*`
  * tokens (border, label, hover background — the same ones the composer toolbar uses)
  * so it follows the page in both themes. The Revert | Retry capsule shares the plate.
  *
  * `.dip-root` — the capsule (border + radius)
- *   `.dip-btn`     — the improve action; sparkle icon in `currentColor`
+ *   `.dip-btn`     — the improve action; the active mode's glyph in `currentColor`
  *   `.dip-revert` / `.dip-divider` / `.dip-retry` — the refined state's two halves
+ *
+ * `.dip-slide` — the mode bar a press on the star opens, floating in the page body above the star
+ *   `.dip-slide-thumb` — the plate under the selected segment; `.dip-slide-seg` — one mode
+ *
+ * `.dip-onboard` — the first-use window, floating above the composer by the star like the
+ * status bubble (same surface, border and shadow tokens)
  *
  * `.dip-ask` — the follow-up panel in the composer seat, framed like the host's own
  * question card (same seat padding, card radius, surface and elevation tokens)
@@ -20,6 +27,8 @@
  *
  * @module dsh-smart-prompt/client/styles
  */
+
+import { SLIDE, SLIDE_BAR_WIDTH_PX } from './mode.js'
 
 export const STYLE_ATTR = 'dsh-smart-prompt'
 
@@ -50,6 +59,22 @@ const PRIMARY_LABEL = 'var(--dsw-alias-label-primary-foreground,#fff)'
 const FOCUS_OUTLINE = '2px solid var(--dsw-alias-state-business-primary)'
 /** The original draft block's height cap (about five lines); longer drafts scroll inside it. */
 const ORIGINAL_MAX_HEIGHT = '110px'
+/** First-use window width, and its gap from the composer card's right edge (where the star sits). */
+const ONBOARD_WIDTH = '300px'
+const ONBOARD_INSET = '8px'
+/**
+ * The mode bar's opening (it grows out of the press point) and the thumb's move between segments:
+ * short, so a quick slide is never held up by them.
+ */
+const SLIDE_OPEN = '160ms cubic-bezier(.2,.8,.2,1) both'
+const SLIDE_THUMB_MOVE = '140ms cubic-bezier(.2,.8,.2,1)'
+/**
+ * The mode bar floats over the whole page, above the composer's own layers and the host's
+ * floating menus (whose z-index runs up to the 1200s), as a pointer-held overlay should.
+ */
+const SLIDE_Z_INDEX = '2000'
+/** The bar's padding: its frame less its border (the bar is border-box). */
+const SLIDE_PAD_PX = SLIDE.insetPx - SLIDE.borderPx
 /** Length of one Stardea pop/burst; short enough to never delay reading the new ideas. */
 const STARDEA_POP = '420ms cubic-bezier(.2,.8,.2,1) both'
 
@@ -70,6 +95,27 @@ export const css = [
   '.dip-btn:disabled{cursor:default;color:var(--dsw-alias-label-tertiary)}',
   '.dip-icon{width:14px;height:14px;flex:none;display:block}',
   '.dip-capsule-icon{display:block;flex:none}',
+
+  // The star takes horizontal touch slides (the mode bar) and leaves vertical ones to the page.
+  // Only the star carries data-mode; the Revert | Retry capsule does not switch modes.
+  // A long press must not start a text selection or the touch callout either.
+  '.dip-root[data-mode]{touch-action:pan-y;-webkit-touch-callout:none}',
+
+  /* ---------- the mode bar (page body, fixed above the star) ---------- */
+  // mode.ts sets left/bottom (kept inside the window) and the transform origin (the press point).
+  // It takes no pointer input: the star holds the pointer while it is open.
+  '.dip-slide{position:fixed;z-index:' + SLIDE_Z_INDEX + ';display:flex;box-sizing:border-box;width:' + String(SLIDE_BAR_WIDTH_PX) + 'px;',
+  'height:' + String(SLIDE.heightPx) + 'px;padding:' + String(SLIDE_PAD_PX) + 'px;border:' + String(SLIDE.borderPx) + 'px solid var(--dsw-alias-border-l2);border-radius:999px;',
+  'background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-base));box-shadow:' + BUBBLE_SHADOW + ';color:var(--dsw-alias-label-secondary);',
+  'font-size:12px;line-height:1;pointer-events:none;user-select:none;animation:dip-slide-in ' + SLIDE_OPEN + '}',
+  // Offsets of an absolute child start inside the border, so the padding alone lines the thumb up
+  // with the segments.
+  '.dip-slide-thumb{position:absolute;top:' + String(SLIDE_PAD_PX) + 'px;bottom:' + String(SLIDE_PAD_PX) + 'px;left:' + String(SLIDE_PAD_PX) + 'px;',
+  'width:' + String(SLIDE.segmentPx) + 'px;border-radius:999px;background:' + HOVER_BG + ';transition:transform ' + SLIDE_THUMB_MOVE + '}',
+  '.dip-slide-seg{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;',
+  'width:' + String(SLIDE.segmentPx) + 'px;white-space:nowrap;transition:color .12s}',
+  '.dip-slide-seg[data-selected="true"]{color:var(--dsw-alias-label-primary);font-weight:500}',
+  '.dip-slide-icon{width:14px;height:14px;flex:none;display:block}',
 
   /* ---------- busy: the click cancels; the icon spins, as before, so the wait is visible ---------- */
   '.dip-root[data-busy="true"] .dip-btn{cursor:progress;color:var(--dsw-alias-state-business-primary)}',
@@ -115,6 +161,37 @@ export const css = [
   '.dip-set-number[aria-invalid="true"]{border-color:var(--dsw-alias-state-error-primary)}',
   '.dip-set-error{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}',
   '.dip-set-link{padding:0;border:0;background:0 0;font:inherit;color:var(--dsw-alias-state-business-primary);cursor:pointer}',
+  '.dip-set-tip{margin-top:4px}',
+
+  /* ---------- first-use window (composer overlay, by the star) ---------- */
+  // Same anchor as the status bubble, pinned to the right edge where the star sits. It floats over
+  // the transcript, so the composer stays free to type in while it shows.
+  '.dip-onboard{position:absolute;right:' + ONBOARD_INSET + ';bottom:var(--dsh-composer-stack-gap,6px);z-index:1;width:' + ONBOARD_WIDTH + ';',
+  'max-width:calc(100% - 2 * ' + ONBOARD_INSET + ');box-sizing:border-box;padding:12px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;',
+  'background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-base));box-shadow:' + BUBBLE_SHADOW + ';',
+  'color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;animation:dip-bar-in 200ms cubic-bezier(.2,.8,.2,1) both}',
+  '.dip-onboard *{box-sizing:border-box}',
+  '.dip-onboard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}',
+  '.dip-onboard-title{margin:0;font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary)}',
+  '.dip-onboard-close{flex:none;display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:999px;outline:none;',
+  'background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}',
+  '.dip-onboard-close:hover{background:' + HOVER_BG + ';color:var(--dsw-alias-label-primary)}',
+  '.dip-onboard-close-icon{display:block}',
+  '.dip-onboard-text{margin:6px 0 0}',
+  '.dip-onboard-note{color:var(--dsw-alias-label-tertiary)}',
+  '.dip-onboard-modes{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:2px}',
+  // The active mode's row is highlighted, so a slide tried while the window is open shows here too.
+  '.dip-onboard-mode{display:flex;align-items:flex-start;gap:8px;padding:4px 6px;border-radius:var(--dsw-radius-md,6px)}',
+  '.dip-onboard-mode[data-active="true"]{background:' + HOVER_BG + ';color:var(--dsw-alias-label-primary)}',
+  '.dip-onboard-icon{flex:none;display:block;width:16px;height:16px;margin-top:1px;color:var(--dsw-alias-label-primary)}',
+  '.dip-onboard-desc{flex:1;min-width:0}',
+  '.dip-onboard-tag{display:inline-block;margin-left:6px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l2);border-radius:999px;',
+  'font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}',
+  '.dip-onboard-foot{display:flex;justify-content:flex-end;margin-top:10px}',
+  '.dip-onboard-ok{height:26px;padding:0 12px;border:0;border-radius:999px;outline:none;background:' + PRIMARY_FILL + ';color:' + PRIMARY_LABEL + ';',
+  'font:inherit;font-size:12px;font-weight:500;line-height:1;cursor:pointer}',
+  '.dip-onboard-ok:hover{background:var(--dsw-alias-button-primary-hover,' + PRIMARY_FILL + ')}',
+  '.dip-onboard-close:focus-visible,.dip-onboard-ok:focus-visible{box-shadow:' + FOCUS_RING + '}',
 
   /* ---------- follow-up panel (composer seat) ---------- */
   // Same seat frame as the host's question card, so swapping the composer for the panel
@@ -178,6 +255,7 @@ export const css = [
 
   /* ---------- keyframes ---------- */
   '@keyframes dip-icon-spin{to{transform:rotate(360deg)}}',
+  '@keyframes dip-slide-in{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}',
   '@keyframes dip-bar-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}',
   '@keyframes dip-bar-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(6px)}}',
   '@keyframes dip-stardea-pop{0%{transform:scale(.6)}45%{transform:scale(1.3)}100%{transform:scale(1)}}',
@@ -185,7 +263,7 @@ export const css = [
 
   /* ---------- motion preferences ---------- */
   '@media (prefers-reduced-motion: reduce){',
-  '.dip-icon,.dip-btn,.dip-revert,.dip-retry,.dip-bar,.dip-bar-retry,.dip-idea,.dip-ask-btn,.dip-stardea,',
+  '.dip-icon,.dip-slide,.dip-slide-thumb,.dip-slide-seg,.dip-btn,.dip-revert,.dip-retry,.dip-bar,.dip-bar-retry,.dip-idea,.dip-ask-btn,.dip-stardea,.dip-onboard,',
   '.dip-stardea-glyph,.dip-stardea-star,.dip-stardea-rays{animation:none!important;transition-duration:.01ms!important}',
   '}',
 ].join('\n')

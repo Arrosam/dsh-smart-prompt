@@ -7,7 +7,12 @@
 
 import React from 'react'
 import { splitCommand } from '../command.js'
+import { DEFAULT_MODE, type Mode } from '../settings-fields.js'
+import { MODE_ORDER, SLIDE, useModeSlide, useModeState, type SlideBarView } from './mode.js'
+import { hostModule } from './host-modules.js'
+import { claimOnboarding, dismissOnboarding, useOnboardingOpen } from './onboarding.js'
 import { cancelRefine, runImprove } from './refine.js'
+import { MODE_COPY } from './settings.js'
 import { clear, storeFor, subscribe, type AttachmentSerializer, type InputActionsFace, type Meta } from './store.js'
 
 /** Localized copy lookup bound to the plugin namespace. */
@@ -67,10 +72,47 @@ function capsuleButton(className: string, icon: keyof typeof STROKE_ICON_PATH, t
 /** Four-point sparkle outline on a 16x16 grid, centred on (8, 8); the Stardea glyph reuses it. */
 export const SPARKLE_PATH = 'M8 1.2l1.35 3.9a2 2 0 001.25 1.25l3.9 1.35-3.9 1.35a2 2 0 00-1.25 1.25L8 14.8l-1.35-3.9a2 2 0 00-1.25-1.25L1.5 8.3l3.9-1.35A2 2 0 006.65 5.7L8 1.2z'
 
-/** Four-point sparkle, filled with the text colour so it follows the host theme. */
-function Sparkle(): React.ReactElement {
-  return React.createElement('svg', { className: 'dip-icon', viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' },
-    React.createElement('path', { d: SPARKLE_PATH, fill: 'currentColor' }),
+/** One path of a mode glyph: filled with the text colour, or stroked with it. */
+interface GlyphPath {
+  readonly d: string
+  readonly paint: 'fill' | 'stroke'
+  readonly transform?: string
+}
+
+/** Stroke width of the outlined glyph parts (16x16 grid), as heavy as the filled parts read at 14px. */
+const GLYPH_STROKE_WIDTH = '1.2'
+
+/**
+ * The star's glyph per mode, on the same 16x16 grid as the sparkle (user decision):
+ * - standard: the original sparkle, unchanged.
+ * - detailed: the sparkle stretched into a pen, its lower point on the end of the last
+ *   (handwritten) line of a page.
+ * - light: a lightning bolt.
+ */
+const MODE_GLYPH: Readonly<Record<Mode, readonly GlyphPath[]>> = {
+  standard: [{ d: SPARKLE_PATH, paint: 'fill' }],
+  detailed: [
+    // The page with a gap in its right edge where the pen crosses it, three written lines, and the
+    // handwriting stroke the pen is drawing.
+    { d: 'M8.5 9.6V2.5H1.5v12h7v-1.6M3.5 5.5h3M3.5 8h3M3.5 10.5h2.2M3.5 12.6c.8-.7 1.5.6 2.3 0s1.2-.4 1.9-.4', paint: 'stroke' },
+    // The sparkle, narrowed and lengthened, tilted 40 degrees so its lower point lands at (8, 12).
+    { d: SPARKLE_PATH, paint: 'fill', transform: 'translate(11.41 7.94) rotate(40) scale(.42 .78) translate(-8 -8)' },
+  ],
+  light: [{ d: 'M9.6 1.2L3.2 9.2h4.1l-1 5.6 6.5-8.1H8.6l1-5.5z', paint: 'fill' }],
+}
+
+/**
+ * The glyph of one mode in the text colour, so it follows the host theme: the composer star and
+ * the first-use window's mode list draw the same icons.
+ *
+ * @param className - the svg's class.
+ * @param mode - whose glyph.
+ */
+export function ModeIcon(className: string, mode: Mode): React.ReactElement {
+  return React.createElement('svg', { className, viewBox: '0 0 16 16', 'data-mode': mode, 'aria-hidden': 'true', focusable: 'false' },
+    ...MODE_GLYPH[mode].map((part, index) => React.createElement('path', part.paint === 'fill'
+      ? { key: index, d: part.d, transform: part.transform, fill: 'currentColor' }
+      : { key: index, d: part.d, transform: part.transform, fill: 'none', stroke: 'currentColor', strokeWidth: GLYPH_STROKE_WIDTH, strokeLinecap: 'round', strokeLinejoin: 'round' })),
   )
 }
 
@@ -119,6 +161,8 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
   const t = props.t
   const sessionId = props.sessionId
   useSessionState(sessionId)
+  const modeState = useModeState()
+  const slide = useModeSlide()
   const draft = readDraft(props)
   const attachmentIds = readAttachmentIds(props)
   // A leading slash token belongs to the harness; only the text after it is ours.
@@ -139,24 +183,33 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
     if (props.serializeAttachments !== undefined) state.serialize = props.serializeAttachments
   }
 
-  const onClick = React.useCallback(() => {
+  const onClick = React.useCallback((event?: React.MouseEvent) => {
+    // The click that ends a slide on the star only picked the mode.
+    if (event !== undefined && slide.endsSlide(event)) return
+    dismissOnboarding()
     if (sessionId === undefined || actions === null) return
     if (storeFor(sessionId).phase === 'busy') {
       cancelRefine(sessionId, t)
       return
     }
     runImprove(sessionId, draft, actions, t)
-  }, [sessionId, actions, draft, t])
+  }, [sessionId, actions, draft, t, slide.endsSlide])
 
-  const title = busy
+  const action = busy
     ? t('buttonTitleBusy')
     : commandOnly ? t('commandOnlyTitle') : split.command !== '' ? t('buttonTitleCommand') : t('buttonTitle')
+  const title = modeState.switchable ? action + '\n' + t('starDragHint') : action
 
   const isDisabled = !busy && (blocked || actions === null)
 
   // Refined = the composer still holds exactly the text we wrote. Editing or sending
   // the draft changes it, which returns the chip to the star with no extra bookkeeping.
   const refined = state !== null && !busy && state.phase === 'done' && state.enhanced !== '' && draft === state.enhanced
+
+  // The first-use window explains the slide, so it opens only once the star is on screen and the
+  // slide works.
+  const starSwitchable = modeState.switchable && !refined
+  React.useEffect(() => { if (starSwitchable) claimOnboarding() }, [starSwitchable])
 
   const onRevert = React.useCallback(() => {
     if (sessionId === undefined) return
@@ -183,11 +236,14 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
     )
   }
 
-  // Single purpose: click improves (or cancels while busy). The improvement mode is not
-  // switched here; it is to move to the settings page (user decision).
+  // A click improves (or cancels while busy). Holding the star, or sliding it sideways, opens the
+  // mode bar instead (see mode.ts); the glyph shows the active mode. The pointer handlers sit on the
+  // capsule around the button, which then keeps the pointer for the rest of the slide.
   return React.createElement('div', {
     className: 'dip-root',
     'data-busy': busy ? 'true' : 'false',
+    'data-mode': modeState.mode,
+    ...slide.handlers,
   },
   React.createElement('button', {
     type: 'button',
@@ -195,11 +251,100 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
     onMouseDown: keepComposerFocus,
     disabled: isDisabled,
     'aria-label': t('buttonAria'),
+    'data-mode': modeState.mode,
     title,
     onClick,
   },
-  Sparkle(),
+  ModeIcon('dip-icon', modeState.mode),
   ),
+  slide.bar !== null ? SlideBar({ view: slide.bar, t }) : null,
+  )
+}
+
+/**
+ * The mode bar's segment names: shorter than the settings page's mode names (user decision), so
+ * each fits its segment.
+ */
+const SLIDE_LABEL: Readonly<Record<Mode, string>> = Object.freeze({ detailed: 'slideDetailed', standard: 'slideStandard', light: 'slideLight' })
+
+/** Host module that draws the mode bar into the page body. */
+const REACT_DOM_MODULE = 'react-dom'
+
+type CreatePortal = (children: React.ReactNode, container: Element) => React.ReactPortal
+
+/** ReactDOM's createPortal; null on a host that does not serve it, where the bar is not drawn. */
+function loadCreatePortal(): CreatePortal | null {
+  const mod = hostModule(REACT_DOM_MODULE) as { createPortal?: unknown } | undefined
+  return typeof mod?.createPortal === 'function' ? mod.createPortal as CreatePortal : null
+}
+
+/**
+ * The mode bar a press on the star opens: a capsule with one segment per mode, icon and name,
+ * and a thumb on the selected one. It is drawn into the page body at a fixed position above the
+ * star (mode.ts places it), so it covers the page without taking or moving any layout, and the
+ * composer's overflow cannot clip it. The host's theme tokens are set on the body, so it still
+ * follows the theme. It takes no pointer input: the star keeps the pointer while it is open.
+ * Without a page body or ReactDOM nothing is drawn; the slide still picks the mode on release.
+ */
+function SlideBar(props: { view: SlideBarView; t: TFn }): React.ReactElement | null {
+  const { view, t } = props
+  const createPortal = loadCreatePortal()
+  if (createPortal === null || typeof document === 'undefined' || document.body === null || document.body === undefined) return null
+  const index = MODE_ORDER.indexOf(view.selected)
+  return createPortal(React.createElement('div', {
+    className: 'dip-slide',
+    role: 'listbox',
+    'aria-label': t('settingsMode'),
+    style: { left: view.left, bottom: view.bottom, transformOrigin: String(view.originX) + 'px 100%' },
+  },
+  React.createElement('span', { className: 'dip-slide-thumb', 'aria-hidden': 'true', style: { transform: 'translateX(' + String(index * SLIDE.segmentPx) + 'px)' } }),
+  ...MODE_ORDER.map((mode) => React.createElement('span', {
+    key: mode,
+    className: 'dip-slide-seg',
+    role: 'option',
+    'data-mode': mode,
+    'data-selected': mode === view.selected ? 'true' : 'false',
+    'aria-selected': mode === view.selected,
+  },
+  ModeIcon('dip-slide-icon', mode),
+  React.createElement('span', { className: 'dip-slide-label' }, t(SLIDE_LABEL[mode])),
+  )),
+  ), document.body)
+}
+
+/**
+ * Clicks inside the overlay must not reach the composer card around its anchor, whose own click
+ * handler (workspace trigger) would also fire.
+ */
+const keepInOverlay = (event: React.MouseEvent): void => { event.stopPropagation() }
+
+/**
+ * The first-use window: a small card floating above the composer, by the star, that explains the
+ * press-and-slide and what each mode does. Open once per browser (see onboarding.ts); it takes no
+ * focus and no composer space, so typing carries on while it shows. The active mode's row is
+ * highlighted, so a slide tried while reading it shows its effect here too.
+ */
+export function OnboardingWindow(props: { t: TFn }): React.ReactElement | null {
+  const { t } = props
+  const open = useOnboardingOpen()
+  const { mode } = useModeState()
+  const titleId = React.useId()
+  if (!open) return null
+  return React.createElement('div', { className: 'dip-onboard', role: 'dialog', 'aria-labelledby': titleId, onClick: keepInOverlay },
+    React.createElement('div', { className: 'dip-onboard-head' },
+      React.createElement('p', { id: titleId, className: 'dip-onboard-title' }, t('onboardingTitle')),
+      React.createElement('button', { type: 'button', className: 'dip-onboard-close', 'aria-label': t('onboardingClose'), title: t('onboardingClose'), onMouseDown: keepComposerFocus, onClick: dismissOnboarding },
+        StrokeIcon('dip-onboard-close-icon', 'close'))),
+    React.createElement('p', { className: 'dip-onboard-text' }, t('onboardingDrag')),
+    React.createElement('ul', { className: 'dip-onboard-modes' },
+      ...MODE_ORDER.map((value) => React.createElement('li', { key: value, className: 'dip-onboard-mode', 'data-mode': value, 'data-active': value === mode ? 'true' : 'false' },
+        ModeIcon('dip-onboard-icon', value),
+        React.createElement('span', { className: 'dip-onboard-desc' },
+          t(MODE_COPY[value].hint),
+          value === DEFAULT_MODE ? React.createElement('span', { className: 'dip-onboard-tag' }, t('onboardingDefault')) : null)))),
+    React.createElement('p', { className: 'dip-onboard-text dip-onboard-note' }, t('onboardingSettings')),
+    React.createElement('div', { className: 'dip-onboard-foot' },
+      React.createElement('button', { type: 'button', className: 'dip-onboard-ok', onMouseDown: keepComposerFocus, onClick: dismissOnboarding }, t('onboardingDismiss'))),
   )
 }
 

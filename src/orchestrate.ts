@@ -343,7 +343,7 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
   // Questions asked in this refinement; a recalled memo's are counted in `recalledAsked`.
   let askedCount = 0
 
-  // Detailed mode ends every user turn with where the questions stand; other modes send none.
+  // Standard and Detailed end every user turn with where the questions stand; Light sends none.
   const statusNote = (state: FollowUpState): string => (policy.roundRules ? '\n\n' + followUpStatus(state) : '')
   const askState = (ended: 'limit' | 'unavailable'): FollowUpState =>
     (ask !== undefined && questionsLeft > 0 ? { kind: 'open', questionsLeft } : { kind: ended })
@@ -361,7 +361,7 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
   if (enhanced === '') return refuse(ERR.EMPTY_OUTPUT, MESSAGE.UNUSABLE_OUTPUT)
 
   // ---- follow-up rounds, with Stardea ideas on request ----
-  // Standard and Light run one round; Detailed asks one question per round until nothing is
+  // Light runs one round; Standard and Detailed ask one question per round until nothing is
   // missing or the cap is reached (FOLLOW_UP_POLICY).
   const ideaTools = Lookups.namesOf([...sources.session, ...sources.web])
   while (ask !== undefined && parsed.questions.length > 0) {
@@ -399,7 +399,7 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
     }
     if (input.signal.aborted) return aborted()
 
-    // Nothing answered (Skip): Standard and Light keep the rewrite; Detailed rewrites with guesses.
+    // Nothing answered (Skip): Light keeps the rewrite; Standard and Detailed rewrite with guesses.
     if (answered.length === 0 && !policy.guessOnSkip) break
 
     // ---- rewrite once more, in the same conversation ----

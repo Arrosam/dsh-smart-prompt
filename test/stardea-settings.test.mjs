@@ -52,6 +52,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const T = { timeout: 15000 }
 const CFG = resolveConfig({})
 const API = '/dsh-smart-prompt/api'
+/** Light keeps one panel with every question (q1, q2); see PANEL_MODE in stardea-host.test.mjs. */
+const PANEL_MODE = 'light'
 const DEFAULTS = { stardeaIdeas: 4, stardeaRounds: 1, stardeaWebSearch: false }
 const WEB_TOOL = 'web_search'
 const SEARCH_TOOL = 'search_session'
@@ -196,7 +198,7 @@ async function refine({ script, desk, web, messages = TRANSCRIPT, answers, input
   const out = await improveDraft(
     { llm, selection: { provider: 'p', model: 'm' }, lastRoute: null, sessionMessages: messages === null ? undefined : async () => messages, askUser: desk?.askUser, web, answers, ...deps },
     CFG,
-    { draft: DRAFT, sessionId: 's1', mode: 'standard', signal: new AbortController().signal, maxQuestions: 5, ...input },
+    { draft: DRAFT, sessionId: 's1', mode: PANEL_MODE, signal: new AbortController().signal, maxQuestions: 5, ...input },
   )
   return { out, llm }
 }
@@ -370,7 +372,7 @@ function mountPlugin({ raw, script = [], web, extra = {} } = {}) {
     get: (name) => services[name],
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
-  apply(ctx, raw)
+  apply(ctx, { defaultMode: PANEL_MODE, ...raw })
   return { route: routes[0], llm }
 }
 

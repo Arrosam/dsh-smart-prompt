@@ -1,8 +1,9 @@
-// Black-box tests for detailed mode's follow-up rounds: one question per round, ask
+// Black-box tests for the follow-up rounds of detailed mode: one question per round, ask
 // again after each answer until the model stops asking or the question cap is
 // reached, then fill the remaining gaps with guesses listed under the rewrite.
-// standard and light keep their single-card behaviour. Expectations come from the
-// requirements, not from the implementation.
+// Standard runs the same rounds (standard-rounds.test.mjs covers it in depth); light keeps
+// its single-card behaviour. Expectations come from the requirements, not from the
+// implementation.
 //
 // Techniques:
 //  - BVA: maxQuestions 0 / 1 / 2 / 3; cumulative asked reaching the cap exactly;
@@ -12,109 +13,23 @@
 //  - Decision table: mode (standard | light | detailed) x user action
 //    (answer | skip | cancel | unavailable).
 //  - EP: the three "asking unavailable" causes (maxQuestions 0, sessionId '', no askUser);
-//    system prompt partitions (detailed interactive vs standard).
+//    system prompt partitions (round modes standard and detailed vs light).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { resolveConfig } from '../lib/config.js'
-import { improveDraft } from '../lib/orchestrate.js'
 import { AnswerMemory } from '../lib/answer-memory.js'
 import { buildSystemPrompt } from '../lib/prompts.js'
+import {
+  ANS, ASK_AGAIN, BODY, GUESS, LISTED, LIST_GUESSES, NO_MORE, ONE_PER_REPLY, PROHIBITION, Q, ROUND_WORDING, SKIPPED,
+  DRAFT, answer, answerAll, asking, assertGuessTurn, assertOneQuestionPerCard, assertStripped, cancel, firstUserText,
+  lastUserText, makeRun, onlyIn, skip, stubAsk, stubLlm,
+} from './support/rounds-harness.mjs'
 
-// ================================================================ fixtures
+/** Modes that ask one question per round (requirement R1-R8 for standard). */
+const ROUND_MODES = ['standard', 'detailed']
 
-// Drafts, rewrites and answers carry no hard facts (no paths, numbers, identifiers),
-// so the fidelity gate never adds a repair call and only the round logic decides.
-const DRAFT = '把这个模块重构一下做得更清晰一些，另外再看下有没有多余的东西'
-const Q = ['要保留现有的对外接口吗？', '多余的东西指哪一类？', '重构后要补测试吗？', '需要同步更新文档吗？']
-const ANS = ['保留不变', '没用到的辅助函数', '要补齐', '需要更新']
-const BODY = ['第一稿：先梳理模块职责。', '第二稿：保留接口并梳理职责。', '第三稿：删除没用到的辅助函数。', '第四稿：补齐测试。', '第五稿：更新文档。']
-
-/** A rewrite ending with a follow-up block listing `questions`. */
-const asking = (body, ...questions) =>
-  body + '\n<missing_info>\n' + questions.map((q) => '<question>' + q + '</question>').join('\n') + '\n</missing_info>'
-
-// ---------------------------------------------------------------- semantic wording
-// Round instructions are checked by meaning, tolerant to rewording.
-const GUESS = /guess/i
-const NO_MORE = /no (?:more |further )?(?:follow-?up )?questions|cannot (?:ask|be asked)|can(?:not|'t| no longer) ask|can no longer|no longer (?:ask|be asked)|not (?:ask|be asked) any (?:more|further)|asking has ended/i
-const LISTED = /\blist/i
-const SKIPPED = /skip/i
-/** Any detailed-round wording; standard/light turns must carry none of it. */
-const ROUND_WORDING = /guess|questions? (?:left|remaining)|remaining questions?|no (?:more|further) (?:follow-?up )?questions|cannot ask|can no longer|at most one question|one question/i
-
-// ================================================================ harness
-
-/** Scripted model. A step is a reply string or `{ throw }` for an upstream error; records every request. */
-function stubLlm(script) {
-  const calls = []
-  return {
-    calls,
-    stream(options) {
-      calls.push(options)
-      const step = script.length > 0 ? script.shift() : ''
-      return (async function* () {
-        if (typeof step === 'object' && step.throw !== undefined) throw new Error(step.throw)
-        if (step !== '') yield { type: 'text-delta', index: 0, text: step }
-        yield { type: 'finish', reason: { kind: 'stop' } }
-      })()
-    },
-  }
-}
-
-const answer = (text) => (questions) => ({ answers: [{ id: questions[0].id, selected: [], custom: text }] })
-const skip = () => () => ({ answers: [] })
-/** The user presses ×: the request signal aborts and the card rejects. */
-const cancel = (controller) => () => { controller.abort(); throw new Error('ASK_CANCELLED') }
-
-/** Records every card shown; round i is answered by `script[i]` (a function of the questions). */
-function stubAsk(script) {
-  const asked = []
-  return {
-    asked,
-    askUser: () => async (questions) => {
-      asked.push(questions)
-      const step = script[asked.length - 1]
-      assert.ok(step !== undefined, 'unexpected ask call #' + asked.length + ': ' + JSON.stringify(questions))
-      return step(questions)
-    },
-  }
-}
-
-const textOf = (message) => message.content.map((p) => p.text ?? '').join('')
-const firstUserText = (call) => textOf(call.messages.find((m) => m.role === 'user'))
-const lastUserText = (call) => textOf(call.messages.filter((m) => m.role === 'user').at(-1))
-
-/** One improveDraft call; `ask` null means no askUser at all. */
-function run({ llm, ask, answers, controller = new AbortController(), ...over }) {
-  return improveDraft(
-    { llm, selection: { provider: 'p', model: 'm' }, lastRoute: null, askUser: ask?.askUser, answers },
-    resolveConfig({}),
-    { draft: DRAFT, sessionId: 's1', mode: 'detailed', signal: controller.signal, maxQuestions: 3, ...over },
-  )
-}
-
-/** Each card held exactly one question: the first one of the reply that asked it. */
-function assertOneQuestionPerCard(ask, expected) {
-  assert.equal(ask.asked.length, expected.length, 'number of ask calls')
-  ask.asked.forEach((card, i) => {
-    assert.equal(card.length, 1, 'card #' + (i + 1) + ' shows exactly one question: ' + JSON.stringify(card))
-    assert.equal(card[0].question, expected[i], 'card #' + (i + 1) + ' shows the first listed question')
-  })
-}
-
-/** A user turn telling the model that asking has ended and the gaps become listed guesses. */
-function assertGuessTurn(text, label) {
-  assert.match(text, GUESS, label + ': says to fill the gaps with guesses; got: ' + text.slice(-800))
-  assert.match(text, NO_MORE, label + ': says no more questions can be asked; got: ' + text.slice(-800))
-  assert.match(text, LISTED, label + ': says to list the guesses under the rewrite; got: ' + text.slice(-800))
-}
-
-/** The final text is the reply body with any follow-up block stripped. */
-function assertStripped(out, body) {
-  assert.equal(out.ok, true, JSON.stringify(out))
-  assert.equal(/missing_info|<question>/.test(out.text), false, 'the follow-up block is stripped: ' + out.text)
-  assert.ok(out.text.includes(body), 'the result is the last reply: ' + out.text)
-}
+/** One improveDraft call in detailed mode with 3 questions; `ask` null means no askUser at all. */
+const run = makeRun({ mode: 'detailed', maxQuestions: 3 })
 
 // ================================================================ 1. one question per round
 
@@ -263,9 +178,9 @@ test('DR-10 [EP unavailable] maxQuestions 0, sessionId "" or no askUser: the fir
 test('DR-11 [Decision] mode x (answer | skip | cancel | unavailable)', async () => {
   const twoQuestions = asking(BODY[0], Q[0], Q[1])
   const foldWithBlock = asking(BODY[1], Q[2])
-  const both = (questions) => ({ answers: questions.map((q, i) => ({ id: q.id, selected: [], custom: ANS[i] })) })
+  const both = answerAll(ANS)
   for (const mode of ['standard', 'light', 'detailed']) {
-    const detailed = mode === 'detailed'
+    const rounds = ROUND_MODES.includes(mode)
     const label = (action) => mode + ' x ' + action
 
     // answer
@@ -273,7 +188,7 @@ test('DR-11 [Decision] mode x (answer | skip | cancel | unavailable)', async () 
       const llm = stubLlm([twoQuestions, foldWithBlock, BODY[2]])
       const ask = stubAsk([both, both])
       const out = await run({ llm, ask, mode, maxQuestions: 3 })
-      if (detailed) {
+      if (rounds) {
         // One question; the fold-in's question is asked in a second round.
         assertOneQuestionPerCard(ask, [Q[0], Q[2]])
         assert.equal(llm.calls.length, 3, label('answer'))
@@ -296,7 +211,7 @@ test('DR-11 [Decision] mode x (answer | skip | cancel | unavailable)', async () 
       const ask = stubAsk([skip()])
       const out = await run({ llm, ask, mode, maxQuestions: 3 })
       assert.equal(ask.asked.length, 1, label('skip'))
-      if (detailed) {
+      if (rounds) {
         assert.equal(llm.calls.length, 2, label('skip') + ': one guess call')
         assert.match(lastUserText(llm.calls[1]), GUESS, label('skip'))
         assertStripped(out, BODY[1])
@@ -325,22 +240,24 @@ test('DR-11 [Decision] mode x (answer | skip | cancel | unavailable)', async () 
       assert.equal(out.ok, true, label('unavailable'))
       assert.equal(ask.asked.length, 0, label('unavailable'))
       assert.equal(llm.calls.length, 1, label('unavailable'))
-      if (detailed) assertGuessTurn(firstUserText(llm.calls[0]), label('unavailable'))
+      if (rounds) assertGuessTurn(firstUserText(llm.calls[0]), label('unavailable'))
       else assert.doesNotMatch(firstUserText(llm.calls[0]), ROUND_WORDING, label('unavailable'))
     }
   }
 })
 
-test('DR-12 [EP] standard and light: the fold-in reply\'s block is never asked, even with budget left', async () => {
-  for (const mode of ['standard', 'light']) {
+test('DR-12 [EP] light never asks the fold-in reply\'s block, even with budget left; the round modes do', async () => {
+  for (const mode of ['light', ...ROUND_MODES]) {
+    const rounds = ROUND_MODES.includes(mode)
     const llm = stubLlm([asking(BODY[0], Q[0]), asking(BODY[1], Q[1]), BODY[2]])
-    const ask = stubAsk([answer(ANS[0])])
+    const ask = stubAsk(rounds ? [answer(ANS[0]), answer(ANS[1])] : [answer(ANS[0])])
     const out = await run({ llm, ask, mode, maxQuestions: 5 })
-    assert.equal(ask.asked.length, 1, mode)
-    assert.equal(llm.calls.length, 2, mode)
-    assertStripped(out, BODY[1])
+    assert.equal(ask.asked.length, rounds ? 2 : 1, mode)
+    assert.equal(llm.calls.length, rounds ? 3 : 2, mode)
+    assertStripped(out, rounds ? BODY[2] : BODY[1])
   }
 })
+
 
 // ================================================================ 6. remembered answers (memo)
 
@@ -388,17 +305,17 @@ test('DR-14 [BVA memo budget 0 left] a retry with maxQuestions 1 folds the memo,
   assert.deepEqual(out.meta.questions, { asked: 1, answered: 1 })
 })
 
-test('DR-15 [EP] standard with a memo: still no ask call at all', async () => {
+test('DR-15 [EP] light with a memo: still no ask call at all', async () => {
   const memory = new AnswerMemory()
   {
     const llm = stubLlm([asking(BODY[0], Q[0], Q[1]), { throw: 'gateway exploded' }])
-    const ask = stubAsk([(qs) => ({ answers: qs.map((q, i) => ({ id: q.id, selected: [], custom: ANS[i] })) })])
-    const out = await run({ llm, ask, answers: memory, mode: 'standard', maxQuestions: 5 })
+    const ask = stubAsk([answerAll(ANS)])
+    const out = await run({ llm, ask, answers: memory, mode: 'light', maxQuestions: 5 })
     assert.equal(out.code, 'UPSTREAM')
   }
   const llm = stubLlm([asking(BODY[1], Q[2]), BODY[2]])
   const ask = stubAsk([])
-  const out = await run({ llm, ask, answers: memory, mode: 'standard', maxQuestions: 5 })
+  const out = await run({ llm, ask, answers: memory, mode: 'light', maxQuestions: 5 })
   assert.equal(ask.asked.length, 0)
   assert.equal(llm.calls.length, 1)
   assert.doesNotMatch(firstUserText(llm.calls[0]), ROUND_WORDING)
@@ -406,15 +323,6 @@ test('DR-15 [EP] standard with a memo: still no ask call at all', async () => {
 })
 
 // ================================================================ 7. system prompt
-
-/** Detailed-only lines mentioning TBD must forbid it, never ask for it. */
-const PROHIBITION = /\b(?:never|not|no|don't|do not|without|absent|replace[sd]?|instead of|avoid)\b|不要|不得|禁止|不写|不留/i
-
-/** Lines of `text` that do not appear in `base`. */
-const onlyIn = (text, base) => {
-  const shared = new Set(base.split('\n').map((l) => l.trim()))
-  return text.split('\n').filter((l) => !shared.has(l.trim()))
-}
 
 test('DR-16 [EP] the detailed-only system prompt text never asks for (TBD: …) markers', () => {
   const cfg = resolveConfig({})
@@ -425,22 +333,20 @@ test('DR-16 [EP] the detailed-only system prompt text never asks for (TBD: …) 
   }
 })
 
-const ONE_PER_REPLY = /\b(?:one|a single|1)\s+(?:follow-?up\s+)?question\b|one (?:question )?at a time|一个问题|每次[^\n。]{0,10}一/i
-const ASK_AGAIN = /\bask(?:ed|ing)?\b[^.\n]{0,100}\bagain\b|\bagain\b[^.\n]{0,100}\bask|\bafter\b[^.\n]{0,80}\banswer[^.\n]{0,150}\b(?:ask|question)|再(?:次)?(?:追问|提问|问)/i
-const LIST_GUESSES = /\blist[^.\n]{0,80}\bguess|\bguess(?:es|ed)?\b[^.\n]{0,120}\blist|guessed details|猜测/i
-
-test('DR-17 [EP] the interactive detailed system prompt has the round rules; standard has none', async () => {
+test('DR-17 [EP] the interactive detailed and standard system prompts have the round rules; light has none', async () => {
   const systemOf = async (mode) => {
     const llm = stubLlm([BODY[0]])
     const out = await run({ llm, ask: stubAsk([]), mode, maxQuestions: 3 })
     assert.equal(out.ok, true, JSON.stringify(out))
     return llm.calls[0].system
   }
-  const [detailed, standard] = await Promise.all([systemOf('detailed'), systemOf('standard')])
-  assert.match(detailed, ONE_PER_REPLY, 'detailed: one question per reply')
-  assert.match(detailed, ASK_AGAIN, 'detailed: may ask again after the answers')
-  assert.match(detailed, LIST_GUESSES, 'detailed: list guesses under the rewrite')
-  assert.doesNotMatch(standard, ONE_PER_REPLY, 'standard: no one-question rule')
-  assert.doesNotMatch(standard, ASK_AGAIN, 'standard: no ask-again rule')
-  assert.doesNotMatch(standard, LIST_GUESSES, 'standard: no guess-listing rule')
+  const [detailed, standard, light] = await Promise.all([systemOf('detailed'), systemOf('standard'), systemOf('light')])
+  for (const [mode, system] of [['detailed', detailed], ['standard', standard]]) {
+    assert.match(system, ONE_PER_REPLY, mode + ': one question per reply')
+    assert.match(system, ASK_AGAIN, mode + ': may ask again after the answers')
+    assert.match(system, LIST_GUESSES, mode + ': list guesses under the rewrite')
+  }
+  assert.doesNotMatch(light, ONE_PER_REPLY, 'light: no one-question rule')
+  assert.doesNotMatch(light, ASK_AGAIN, 'light: no ask-again rule')
+  assert.doesNotMatch(light, LIST_GUESSES, 'light: no guess-listing rule')
 })

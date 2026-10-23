@@ -3,9 +3,10 @@
  *
  * Slot entries:
  * - `conversation.input.right` — the sparkle button in the composer tool row.
- * - `conversation.input.overlay` — the floating "improved · certificate" bubble. The host pins
- *   this slot's anchor at zero height to the top edge of the composer card, so the bubble
- *   never takes layout space (the `conversation.input.dock` row it used to sit in did).
+ * - `conversation.input.overlay` — the floating "improved · certificate" bubble, and the
+ *   first-use window that explains the star's mode slide. The host pins this slot's anchor at
+ *   zero height to the top edge of the composer card, so neither takes layout space (the
+ *   `conversation.input.dock` row the bubble used to sit in did).
  * - `conversation.composer` (chain) — the follow-up panel, which takes the composer seat while
  *   a refine waits for answers. Only on hosts with the `uiSession` pending-interaction registry.
  * - `plugins.bundle.config` — the settings section, on hosts that serve settings forms.
@@ -18,9 +19,11 @@
  */
 
 import React from 'react'
-import { ImproveButton, StatusBar, type TFn } from './components.js'
+import { ImproveButton, OnboardingWindow, StatusBar, type TFn } from './components.js'
 import { FollowUpPanel } from './follow-up.js'
+import { hostModule } from './host-modules.js'
 import { NS, en, zh } from './locales.js'
+import { provideModeForm } from './mode.js'
 import { asFollowUp, providePublisher, type FollowUpInteraction, type FollowUpPublisher } from './refine.js'
 import { STYLE_ATTR, css } from './styles.js'
 import { ENTRY_ID, PACKAGE_NAME, SettingsSection, settingsSection, type CatalogGroup, type Primitives } from './settings.js'
@@ -107,6 +110,9 @@ const SLOT = Object.freeze({
 
 /** Entry id of the follow-up panel in the composer chain. */
 const FOLLOW_UP_ENTRY_ID = 'dsh-smart-prompt-follow-up'
+
+/** Entry id of the first-use window in the overlay slot. */
+const ONBOARDING_ENTRY_ID = 'dsh-smart-prompt-onboarding'
 
 /**
  * Precedence of the follow-up panel among a session's pending interactions (larger wins).
@@ -199,20 +205,13 @@ function mountFollowUp(ctx: ClientContext, uiSession: UiSessionFace | undefined,
   'follow-up panel', 'follow-up panel')
 }
 
-/** The module loader's require, when the bundle runs under it. */
-declare const require: ((id: string) => unknown) | undefined
-
 function loadPrimitives(): Primitives | undefined {
-  try {
-    const mod = typeof require === 'function' ? require(PRIMITIVES_MODULE) as Partial<Primitives> | undefined : undefined
-    return mod !== undefined && typeof mod.SettingsFormModel === 'function' && typeof mod.SettingsForm === 'function'
-      && typeof mod.SegmentedControl === 'function' && typeof mod.Switch === 'function' && typeof mod.settingsTextField === 'function'
-      && typeof mod.settingsNumberField === 'function'
-      ? mod as Primitives
-      : undefined
-  } catch {
-    return undefined
-  }
+  const mod = hostModule(PRIMITIVES_MODULE) as Partial<Primitives> | undefined
+  return mod !== undefined && typeof mod.SettingsFormModel === 'function' && typeof mod.SettingsForm === 'function'
+    && typeof mod.SegmentedControl === 'function' && typeof mod.Switch === 'function' && typeof mod.settingsTextField === 'function'
+    && typeof mod.settingsNumberField === 'function'
+    ? mod as Primitives
+    : undefined
 }
 
 type SlotProps = Record<string, unknown> & { sessionId?: string }
@@ -288,11 +287,11 @@ export function apply(ctx: ClientContext): void {
   if (typeof ctx.inject === 'function') ctx.inject([UI_SESSION_SERVICE], followUp)
   else followUp(ctx)
 
-  // Plugins page (DSH 0.2+): the mode and model settings. Never on the plugin's own
-  // inject list, so the composer button never waits for the settings services.
+  // The settings services: the star's mode switch and the Plugins page (DSH 0.2+) mode and
+  // model settings. Never on the plugin's own inject list, so the composer button never waits
+  // for them; without them the star keeps the default mode's icon and does not switch.
   const primitives = loadPrimitives()
-  if (primitives === undefined) return
-  const Section = SettingsSection(primitives)
+  const Section = primitives !== undefined ? SettingsSection(primitives) : undefined
   const loadCatalog = async (): Promise<readonly CatalogGroup[] | undefined> => {
     // Read at call time: the namespace may mount after this plugin applies.
     const session = ctx.get?.(REMOTE_SESSION_SERVICE) as RemoteSessionFace | undefined
@@ -302,12 +301,38 @@ export function apply(ctx: ClientContext): void {
   // DSH does not order client plugin start-up, so `configForms` may not exist yet when
   // this plugin applies; a one-off `ctx.get` then skipped the section for good (seen on
   // fresh installs). `ctx.inject` waits for the service instead, and withdraws the
-  // section if the service goes away.
+  // section and the mode switch if the service goes away.
   const mount = (owner: ClientContext): void => {
-    mountSettings(owner, owner.get?.(CONFIG_FORMS_SERVICE) as ConfigFormsFace | undefined, primitives, Section, loadCatalog, t)
+    const configForms = owner.get?.(CONFIG_FORMS_SERVICE) as ConfigFormsFace | undefined
+    mountModeSwitch(owner, configForms, t)
+    if (primitives !== undefined && Section !== undefined) mountSettings(owner, configForms, primitives, Section, loadCatalog, t)
   }
   if (typeof ctx.inject === 'function') ctx.inject([CONFIG_FORMS_SERVICE], mount)
   else mount(ctx)
+}
+
+/**
+ * Let the composer star switch the improvement mode while the host serves settings forms: hand
+ * the switch this plugin's entry form (the one the settings section edits, so both share one
+ * stored mode), and register the first-use window that explains the slide.
+ *
+ * @param ctx - context that owns both (disposed with the `configForms` service).
+ * @param configForms - the host settings-forms service; nothing happens without it.
+ * @param t - localized copy lookup.
+ */
+function mountModeSwitch(ctx: ClientContext, configForms: ConfigFormsFace | undefined, t: TFn): void {
+  if (configForms === undefined) return
+  ctx.effect(() => {
+    try {
+      return provideModeForm(configForms.get(ENTRY_ID))
+    } catch (error) {
+      console.error('[dsh-smart-prompt] mode switch unavailable; the star keeps the default mode', error)
+      return () => {}
+    }
+  }, 'dsh-smart-prompt: mode switch')
+  registerComposerEntry(ctx, SLOT.bar, ONBOARDING_ENTRY_ID, () => ({}),
+    () => React.createElement(OnboardingWindow, { t }),
+    'first-use window', 'first-use window')
 }
 
 /**

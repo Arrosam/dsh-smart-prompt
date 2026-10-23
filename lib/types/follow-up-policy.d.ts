@@ -1,8 +1,8 @@
 /**
  * How each mode runs its follow-up questions.
  *
- * Standard and Light ask once: every question in one panel, then one rewrite with the
- * answers; skipping keeps the first rewrite. Detailed asks one question per round until
+ * Light asks once: every question in one panel, then one rewrite with the answers;
+ * skipping keeps the first rewrite. Standard and Detailed ask one question per round until
  * nothing is missing or the question cap is reached (user requirement), and when the user
  * skips, or the cap is reached, the gaps are filled with guesses listed under the rewrite.
  *
@@ -19,7 +19,7 @@ export interface FollowUpPolicy {
     readonly askAgain: boolean;
     /** Whether skipping the questions rewrites once more, filling the gaps with listed guesses. */
     readonly guessOnSkip: boolean;
-    /** Whether the detailed-mode follow-up rules are appended to the system prompt. */
+    /** Whether every user turn ends with the follow-up status note the round rules of the mode template follow. */
     readonly roundRules: boolean;
 }
 /** The policy of each mode. */

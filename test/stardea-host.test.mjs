@@ -40,6 +40,13 @@ import { apply } from '../lib/index.js'
 
 const CFG = resolveConfig({})
 const API = '/dsh-smart-prompt/api'
+/**
+ * The mode these cases run in. They exercise one panel holding every question (ids q1, q2),
+ * one rewrite with the answers and Skip keeping the first rewrite: light keeps that single
+ * round. Standard and detailed ask one question per round (standard-rounds.test.mjs covers
+ * Stardea there). The route cases select it through the saved defaultMode.
+ */
+const PANEL_MODE = 'light'
 /** A refinement left waiting must fail its test instead of hanging the file. */
 const T = { timeout: 15000 }
 const MAX_IDEAS_PER_CLICK = 4
@@ -195,7 +202,7 @@ async function refine({ script, desk, web, rounds = 3, stardeaRounds = rounds, m
       ...deps,
     },
     CFG,
-    { draft: DRAFT, sessionId: 's1', mode: 'standard', signal: controller.signal, maxQuestions: 5, lookupRounds: rounds, stardeaRounds, stardeaWebSearch: true, ...input },
+    { draft: DRAFT, sessionId: 's1', mode: PANEL_MODE, signal: controller.signal, maxQuestions: 5, lookupRounds: rounds, stardeaRounds, stardeaWebSearch: true, ...input },
   )
   return { out, llm }
 }
@@ -839,7 +846,7 @@ function mountPlugin({ raw, script = [], web } = {}) {
     get: (name) => services[name],
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
-  apply(ctx, raw)
+  apply(ctx, { defaultMode: PANEL_MODE, ...raw })
   assert.equal(routes.length, 1)
   return { route: routes[0], llm, warnings }
 }

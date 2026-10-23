@@ -1,6 +1,6 @@
 {
   "name": "dsh-smart-prompt",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Rewrite the composer draft into a clearer, agent-ready prompt in one click, with Revert and Retry. 一键把输入框草稿改写为更清晰、更贴 Agent 执行的提示词。",
   "icon": "./assets/icon.svg",
   "publishConfig": {
