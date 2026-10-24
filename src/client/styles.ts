@@ -75,6 +75,13 @@ const SLIDE_THUMB_MOVE = '140ms cubic-bezier(.2,.8,.2,1)'
 const SLIDE_Z_INDEX = '2000'
 /** The bar's padding: its frame less its border (the bar is border-box). */
 const SLIDE_PAD_PX = SLIDE.insetPx - SLIDE.borderPx
+/**
+ * One written line of the Detailed glyph while a rewrite runs: unhurried, like handwriting, and
+ * slower than the other modes' loops.
+ */
+const PEN_WRITE = '1.4s ease-in-out infinite'
+/** One strike of the Light glyph while a rewrite runs: a fast flash, then a short pause. */
+const BOLT_STRIKE = '.9s ease-out infinite'
 /** Length of one Stardea pop/burst; short enough to never delay reading the new ideas. */
 const STARDEA_POP = '420ms cubic-bezier(.2,.8,.2,1) both'
 
@@ -117,9 +124,17 @@ export const css = [
   '.dip-slide-seg[data-selected="true"]{color:var(--dsw-alias-label-primary);font-weight:500}',
   '.dip-slide-icon{width:14px;height:14px;flex:none;display:block}',
 
-  /* ---------- busy: the click cancels; the icon spins, as before, so the wait is visible ---------- */
+  /* ---------- busy: the click cancels; the glyph runs its mode's animation, so the wait is visible ---------- */
   '.dip-root[data-busy="true"] .dip-btn{cursor:progress;color:var(--dsw-alias-state-business-primary)}',
-  '.dip-root[data-busy="true"] .dip-icon{animation:dip-icon-spin .8s linear infinite}',
+  // Standard: the sparkle spins, as before.
+  '.dip-root[data-busy="true"] .dip-icon[data-mode="standard"]{animation:dip-icon-spin .8s linear infinite}',
+  // Detailed: the pen writes its line over and over. The ink is drawn on (a dash of the whole,
+  // normalised length sliding into view) while the pen travels along it in step, then the line
+  // fades and the pen goes back to the line's start. Same duration for both, so they stay in step.
+  '.dip-root[data-busy="true"] .dip-glyph-ink{stroke-dasharray:1;animation:dip-ink-draw ' + PEN_WRITE + '}',
+  '.dip-root[data-busy="true"] .dip-glyph-pen{animation:dip-pen-write ' + PEN_WRITE + '}',
+  // Light: the bolt strikes — a quick double flash with a jolt in size, then a dim pause.
+  '.dip-root[data-busy="true"] .dip-icon[data-mode="light"]{animation:dip-bolt-strike ' + BOLT_STRIKE + '}',
 
   /* ---------- refined: the Revert | Retry halves ---------- */
   '.dip-divider{width:1px;align-self:stretch;margin:7px 0;background:var(--dsw-alias-border-l2);pointer-events:none}',
@@ -255,6 +270,14 @@ export const css = [
 
   /* ---------- keyframes ---------- */
   '@keyframes dip-icon-spin{to{transform:rotate(360deg)}}',
+  // The pen's point (8, 12) starts on the ink line's start (3.5, 12.6) and follows its wave to the
+  // line's end (7.7, 12.2), next to where the pen rests (16x16 glyph units).
+  '@keyframes dip-pen-write{0%{transform:translate(-4.5px,.6px)}18%{transform:translate(-3.5px,0)}36%{transform:translate(-2.3px,.6px)}',
+  '54%{transform:translate(-1.2px,.1px)}72%,86%{transform:translate(0,0)}100%{transform:translate(-4.5px,.6px)}}',
+  '@keyframes dip-ink-draw{0%{stroke-dashoffset:1;opacity:1}72%{stroke-dashoffset:0;opacity:1}86%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}',
+  // No glow: the capsule stays free of glow effects (see the header); the flash is opacity and size.
+  '@keyframes dip-bolt-strike{0%{opacity:.35;transform:scale(.9)}6%{opacity:1;transform:scale(1.18)}',
+  '12%{opacity:.3;transform:scale(1)}18%{opacity:1;transform:scale(1.1)}40%{opacity:1;transform:scale(1)}100%{opacity:.35;transform:scale(.9)}}',
   '@keyframes dip-slide-in{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}',
   '@keyframes dip-bar-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}',
   '@keyframes dip-bar-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(6px)}}',
@@ -264,6 +287,6 @@ export const css = [
   /* ---------- motion preferences ---------- */
   '@media (prefers-reduced-motion: reduce){',
   '.dip-icon,.dip-slide,.dip-slide-thumb,.dip-slide-seg,.dip-btn,.dip-revert,.dip-retry,.dip-bar,.dip-bar-retry,.dip-idea,.dip-ask-btn,.dip-stardea,.dip-onboard,',
-  '.dip-stardea-glyph,.dip-stardea-star,.dip-stardea-rays{animation:none!important;transition-duration:.01ms!important}',
+  '.dip-stardea-glyph,.dip-stardea-star,.dip-stardea-rays,.dip-glyph-pen,.dip-glyph-ink{animation:none!important;transition-duration:.01ms!important}',
   '}',
 ].join('\n')

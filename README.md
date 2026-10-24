@@ -41,7 +41,7 @@ Slash commands work too: in `/bugfix <text>` the command stays as is and only th
 
 Switch the improvement method fast by **holding the ✦ star** in the composer, or choose it in **Settings → Plugins → dsh-smart-prompt**. Both change the same saved setting, so they always agree. Hold the star for a moment (or start sliding it sideways) and a capsule-shaped mode bar opens above it, floating over the page without moving anything. Left to right it shows **Detailed ← Standard → Light**, each with its icon and name, with the active mode under your pointer. Slide to the mode you want and let go: the setting is saved at once. Sliding past either end stays on that end (it does not wrap around); letting go without sliding, or pressing **Esc**, keeps the mode. A click without holding or sliding still improves the draft.
 
-The star's icon shows the active mode, also after a reload: a stretched star writing on a page for **Detailed**, the usual ✦ for **Standard**, and a lightning bolt for **Light**.
+The star's icon shows the active mode, also after a reload: a stretched star writing on a page for **Detailed**, the usual ✦ for **Standard**, and a lightning bolt for **Light**. While a rewrite runs, each icon has its own animation: the ✦ spins (Standard), the star-pen writes its line on the page again and again (Detailed), and the lightning bolt strikes with a quick double flash (Light).
 
 The first time the star appears, a small window above the composer explains the hold-and-slide and what each mode does. It shows once per browser and never blocks the composer: keep typing, or close it with **Got it** or ×.
 

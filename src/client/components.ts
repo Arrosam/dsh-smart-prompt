@@ -77,6 +77,15 @@ interface GlyphPath {
   readonly d: string
   readonly paint: 'fill' | 'stroke'
   readonly transform?: string
+  /** Class of the part a running animation moves (styles.ts); absent on still parts. */
+  readonly className?: string
+  /**
+   * Class of a group drawn around the path, for an animation that must not replace the path's
+   * own transform attribute (a CSS transform on the path itself would).
+   */
+  readonly groupClassName?: string
+  /** Normalised path length, so a stroke can be drawn on with a dash of 1 whatever its real length. */
+  readonly pathLength?: string
 }
 
 /** Stroke width of the outlined glyph parts (16x16 grid), as heavy as the filled parts read at 14px. */
@@ -92,11 +101,14 @@ const GLYPH_STROKE_WIDTH = '1.2'
 const MODE_GLYPH: Readonly<Record<Mode, readonly GlyphPath[]>> = {
   standard: [{ d: SPARKLE_PATH, paint: 'fill' }],
   detailed: [
-    // The page with a gap in its right edge where the pen crosses it, three written lines, and the
-    // handwriting stroke the pen is drawing.
-    { d: 'M8.5 9.6V2.5H1.5v12h7v-1.6M3.5 5.5h3M3.5 8h3M3.5 10.5h2.2M3.5 12.6c.8-.7 1.5.6 2.3 0s1.2-.4 1.9-.4', paint: 'stroke' },
+    // The page with a gap in its right edge where the pen crosses it, and three written lines.
+    { d: 'M8.5 9.6V2.5H1.5v12h7v-1.6M3.5 5.5h3M3.5 8h3M3.5 10.5h2.2', paint: 'stroke' },
+    // The handwriting stroke the pen is drawing; it ends at the pen's point. While a rewrite runs
+    // it is written out again and again (styles.ts).
+    { d: 'M3.5 12.6c.8-.7 1.5.6 2.3 0s1.2-.4 1.9-.4', paint: 'stroke', className: 'dip-glyph-ink', pathLength: '1' },
     // The sparkle, narrowed and lengthened, tilted 40 degrees so its lower point lands at (8, 12).
-    { d: SPARKLE_PATH, paint: 'fill', transform: 'translate(11.41 7.94) rotate(40) scale(.42 .78) translate(-8 -8)' },
+    // While a rewrite runs it travels along the handwriting stroke (styles.ts).
+    { d: SPARKLE_PATH, paint: 'fill', transform: 'translate(11.41 7.94) rotate(40) scale(.42 .78) translate(-8 -8)', groupClassName: 'dip-glyph-pen' },
   ],
   light: [{ d: 'M9.6 1.2L3.2 9.2h4.1l-1 5.6 6.5-8.1H8.6l1-5.5z', paint: 'fill' }],
 }
@@ -110,9 +122,13 @@ const MODE_GLYPH: Readonly<Record<Mode, readonly GlyphPath[]>> = {
  */
 export function ModeIcon(className: string, mode: Mode): React.ReactElement {
   return React.createElement('svg', { className, viewBox: '0 0 16 16', 'data-mode': mode, 'aria-hidden': 'true', focusable: 'false' },
-    ...MODE_GLYPH[mode].map((part, index) => React.createElement('path', part.paint === 'fill'
-      ? { key: index, d: part.d, transform: part.transform, fill: 'currentColor' }
-      : { key: index, d: part.d, transform: part.transform, fill: 'none', stroke: 'currentColor', strokeWidth: GLYPH_STROKE_WIDTH, strokeLinecap: 'round', strokeLinejoin: 'round' })),
+    ...MODE_GLYPH[mode].map((part, index) => {
+      const shape = { d: part.d, transform: part.transform, className: part.className, pathLength: part.pathLength }
+      const path = React.createElement('path', part.paint === 'fill'
+        ? { key: index, ...shape, fill: 'currentColor' }
+        : { key: index, ...shape, fill: 'none', stroke: 'currentColor', strokeWidth: GLYPH_STROKE_WIDTH, strokeLinecap: 'round', strokeLinejoin: 'round' })
+      return part.groupClassName !== undefined ? React.createElement('g', { key: index, className: part.groupClassName }, path) : path
+    }),
   )
 }
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 1.2.0
+
+- **A running animation per mode**: while a rewrite runs, the star's icon now plays an animation that fits its mode. **Detailed**: the star-pen moves along the handwriting line at the bottom of the page while the line is drawn under it, then the line fades and the pen goes back to write it again (1.4 s per line). **Light**: the lightning bolt strikes, with a quick double flash and a small jolt in size, then a short dim pause (0.9 s per strike). **Standard** keeps its spin. The animations start and stop with the rewrite like the spin always did, and are switched off when the system asks for reduced motion.
 - **Higher output limit**: the default `maxTokens` (most output tokens per model call) is now **32000**, up from 8192. Reasoning models count their thinking against this limit. A small limit could be used up by thinking alone, and the refine then failed with "The model returned nothing" (seen with opencode's free DeepSeek V4.1 Flash). A `maxTokens` set in the plugin config still applies. If the problem continues, set a thinking level for the model, such as **Low**.
 
 ## 1.1.0
