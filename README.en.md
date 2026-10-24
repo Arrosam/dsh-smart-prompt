@@ -241,7 +241,7 @@ Set it in the profile's `cordis.patch.yml`:
         standardMaxRatio: 2.5
         acceptanceCriteria: false  # append a verifiable acceptance clause in Standard/Detailed
         temperature: 0.3
-        maxTokens: 8192
+        maxTokens: 32000
         timeoutMs: 180000
         maxInputChars: 20000
         contextTurns: 3            # 0 disables history

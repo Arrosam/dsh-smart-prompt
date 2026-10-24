@@ -209,7 +209,7 @@ test('RR-10 [EP] an error thrown while processing answers 200 UNKNOWN with its m
 
 const DEFAULTS = {
   defaultMode: 'standard', lightMaxRatio: 2, standardMaxRatio: 0, acceptanceCriteria: false, temperature: 0.3,
-  maxTokens: 8192, timeoutMs: 180000, maxInputChars: 20000, contextTurns: 3, contextChars: 6000, smartContext: true,
+  maxTokens: 32000, timeoutMs: 180000, maxInputChars: 20000, contextTurns: 3, contextChars: 6000, smartContext: true,
   fidelityGate: true, lengthGate: true, knowledgeChars: 4000, provider: '', model: '', reasoningEffort: 'low', logFailures: true,
 }
 

@@ -124,7 +124,7 @@ Other options live in the profile's `cordis.patch.yml`. All are optional; the va
         standardMaxRatio: 0        # 0 = no length cap
         acceptanceCriteria: false  # Standard/Detailed: add a checkable "done when" line
         temperature: 0.3
-        maxTokens: 8192
+        maxTokens: 32000
         timeoutMs: 180000
         maxInputChars: 20000
         contextTurns: 3            # 0 turns session context off

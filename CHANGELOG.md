@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Higher output limit**: the default `maxTokens` (most output tokens per model call) is now **32000**, up from 8192. Reasoning models count their thinking against this limit. A small limit could be used up by thinking alone, and the refine then failed with "The model returned nothing" (seen with opencode's free DeepSeek V4.1 Flash). A `maxTokens` set in the plugin config still applies. If the problem continues, set a thinking level for the model, such as **Low**.
+
 ## 1.1.0
 
 - **Hold the star to switch modes**: hold the ✦ star in the composer for 300 ms, or slide it at least 16 px sideways, and a capsule-shaped mode bar opens above it. Left to right it shows **Detailed ← Standard → Light**, each with its icon and name (zh: 详细 / 标准 / 轻量). The bar floats over the page (drawn in the page body at a fixed position), so it never pushes or moves the composer or anything else. It opens with the active mode under the pointer. Each 88 px of sideways slide moves the selection one mode, starting from half a segment. Letting go saves the selected mode. Sliding past either end stays on that end instead of wrapping around. Esc, a cancelled pointer, or letting go without sliding keeps the mode. It saves the same `defaultMode` setting as **Improvement method** in plugin settings, through the same settings form, so the two stay in sync. A click without holding or sliding still improves (or cancels).
