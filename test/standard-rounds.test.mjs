@@ -1,8 +1,9 @@
 // Integration and system tests for "standard takes detailed mode's whole follow-up flow"
-// (requirements R1-R12). Expected outcomes come from the requirements. The "behaves exactly as
-// before" requirements (R10 detailed, R11 light, R12 everything else) use the build committed
-// at git HEAD as the oracle (test/support/baseline.mjs); those cases are skipped when there is
-// no git checkout to read it from.
+// (requirements R1-R12), released in 1.1.0. Expected outcomes come from the requirements. The
+// "behaves exactly as before" requirements (R10 detailed, R11 light, R12 everything else) use
+// the build of the release before that change as the oracle (BEFORE_REF, read through
+// test/support/baseline.mjs); those cases are skipped when there is no git checkout with that
+// tag to read it from.
 //
 // Techniques:
 //  - BVA: maxQuestions 0 / 1 / 2 / 5; questions left 1 (the last card) and 0 (cap reached, or a
@@ -14,7 +15,7 @@
 //  - Decision table: mode x user action (answer | skip | close | unavailable).
 //  - State transition: open -> answered -> open ... -> limit; open -> skipped;
 //    open -> cancelled; failed -> retried with the remembered answers.
-//  - Differential: standard vs detailed (one flow); detailed, light and standard vs HEAD.
+//  - Differential: standard vs detailed (one flow); detailed, light and standard vs 1.0.1.
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -45,11 +46,17 @@ const ROUND_MODES = ['standard', 'detailed']
 
 /** The working-tree build, shaped like the baseline build. */
 const CURRENT = { improveDraft, resolveConfig, buildSystemPrompt, modePrompt, AnswerMemory }
-const BASELINE = await loadBaseline()
+/**
+ * The release before this change: the "before" of R10-R12. Pinned to its tag, not HEAD: once the
+ * change was committed, HEAD held the change itself, so SR2-19's "the old build sent no note"
+ * failed and the other comparisons only compared the change with itself.
+ */
+const BEFORE_REF = 'v1.0.1'
+const BASELINE = await loadBaseline(BEFORE_REF)
 after(() => BASELINE.dispose?.())
-const HEAD = BASELINE.build
-/** Skip reason for the cases that need the HEAD build. */
-const NEEDS_HEAD = { skip: BASELINE.skip ?? false }
+const BEFORE = BASELINE.build
+/** Skip reason for the cases that need the 1.0.1 build. */
+const NEEDS_BEFORE = { skip: BASELINE.skip ?? false }
 
 /** One standard refinement, 5 questions allowed (the default cap). */
 const run = makeRun({ mode: 'standard', maxQuestions: 5 })
@@ -310,6 +317,15 @@ const SCENARIOS = [
   { name: 'acceptance criteria on', raw: { acceptanceCriteria: true }, attempts: [once([asking(B[0], QS[0]), B[1]], () => [answer(AS[0])])] },
 ]
 
+/**
+ * Requirement changes made after 1.0.1 that hold in every mode, so they are not part of
+ * "behaves exactly as before" (R10-R12): the default output-token cap per model call
+ * (maxTokens) is 32000, it was 8192. The 1.0.1 build resolves the old default, so the oracle
+ * gets the new one. No scenario sets maxTokens itself, so overriding it never hides a
+ * scenario's own value.
+ */
+const SINCE_BEFORE = { maxTokens: 32000 }
+
 /** An outcome without its wall-clock time. */
 const settled = (out) => (out.ok ? { ...out, meta: { ...out.meta, elapsedMs: 0 } } : out)
 
@@ -335,7 +351,8 @@ function renumberIds(trace) {
 /** Play one scenario through one build: every request, card, outcome and Stardea result. */
 async function play(build, mode, scenario) {
   const memory = scenario.memo === true ? new build.AnswerMemory() : undefined
-  const config = build.resolveConfig(scenario.raw ?? {})
+  const resolved = build.resolveConfig(scenario.raw ?? {})
+  const config = build === BEFORE ? { ...resolved, ...SINCE_BEFORE } : resolved
   const ideas = []
   const attempts = []
   for (const attempt of scenario.attempts) {
@@ -461,7 +478,7 @@ test('SR2-17 [EP R9] the standard template never asks for TBD or placeholder not
   for (const sentence of mentions) assert.match(sentence, PROHIBITION, 'a sentence asks for a TBD / placeholder note: ' + sentence)
 })
 
-// ================================================================ 9. nothing else changes (R12) — HEAD oracle
+// ================================================================ 9. nothing else changes (R12) — 1.0.1 oracle
 
 /** The system prompt the first call of one run sends. */
 async function sentSystem(build, mode, raw, over) {
@@ -477,25 +494,25 @@ const PROMPT_PARTITIONS = [
   ['not interactive, acceptance criteria', { acceptanceCriteria: true }, { sessionId: '' }],
 ]
 
-test('SR2-18 [Differential R12] the standard system prompt differs from HEAD only in the standard template', NEEDS_HEAD, async () => {
+test('SR2-18 [Differential R12] the standard system prompt differs from 1.0.1 only in the standard template', NEEDS_BEFORE, async () => {
   const MARK = '<standard template>'
   for (const [name, raw, over] of PROMPT_PARTITIONS) {
     const now = await sentSystem(CURRENT, 'standard', raw, over)
-    const before = await sentSystem(HEAD, 'standard', raw, over)
-    assert.ok(now.includes(CURRENT.modePrompt('standard')) && before.includes(HEAD.modePrompt('standard')), name)
-    assert.equal(now.replace(CURRENT.modePrompt('standard'), MARK), before.replace(HEAD.modePrompt('standard'), MARK), name)
+    const before = await sentSystem(BEFORE, 'standard', raw, over)
+    assert.ok(now.includes(CURRENT.modePrompt('standard')) && before.includes(BEFORE.modePrompt('standard')), name)
+    assert.equal(now.replace(CURRENT.modePrompt('standard'), MARK), before.replace(BEFORE.modePrompt('standard'), MARK), name)
   }
 })
 
 /** A user turn without the follow-up note that may end it. */
 const stripNote = (text) => text.replace(/\s*<follow_up_status>[\s\S]*?<\/follow_up_status>\s*$/, '')
 
-test('SR2-19 [Differential R3 R12] standard user turns are HEAD\'s turns plus the note; requests, cards and results are otherwise unchanged', NEEDS_HEAD, async () => {
-  // Scenarios whose flow standard shared with HEAD: at most one question, no skip.
+test('SR2-19 [Differential R3 R12] standard user turns are 1.0.1\'s turns plus the note; requests, cards and results are otherwise unchanged', NEEDS_BEFORE, async () => {
+  // Scenarios whose flow standard shared with 1.0.1: at most one question, no skip.
   const shared = ['no question', 'one question, answered', 'maxQuestions 0', 'no session', 'no askUser', 'an answered hard fact dropped, then repaired', 'over the length ceiling', 'acceptance criteria on']
   for (const scenario of SCENARIOS.filter((s) => shared.includes(s.name))) {
     const now = await play(CURRENT, 'standard', scenario)
-    const before = await play(HEAD, 'standard', scenario)
+    const before = await play(BEFORE, 'standard', scenario)
     const view = (trace) => trace.attempts.map(({ calls, cards, outcome }) => ({
       calls: calls.map((call) => ({ tools: call.tools, messages: call.messages.map((m) => ({ role: m.role, parts: m.content.length, text: stripNote(textOf(m)) })) })),
       cards,
@@ -504,46 +521,46 @@ test('SR2-19 [Differential R3 R12] standard user turns are HEAD\'s turns plus th
     assert.deepEqual(view(now), view(before), scenario.name)
     const first = now.attempts[0].calls[0]
     assert.notEqual(statusOf(firstUserText(first)), undefined, scenario.name + ': the first standard turn ends with a note')
-    assert.equal(statusOf(firstUserText(before.attempts[0].calls[0])), undefined, scenario.name + ': HEAD sent none')
+    assert.equal(statusOf(firstUserText(before.attempts[0].calls[0])), undefined, scenario.name + ': 1.0.1 sent none')
   }
 })
 
 // ================================================================ 10. detailed unchanged (R10)
 
-test('SR2-20 [R10] prompts/detailed.md is unchanged from HEAD', { skip: gitShow('prompts/detailed.md') === undefined ? 'no git checkout' : false }, () => {
-  assert.equal(readFileSync(new URL('../prompts/detailed.md', import.meta.url), 'utf8'), gitShow('prompts/detailed.md'))
+test('SR2-20 [R10] prompts/detailed.md is unchanged from 1.0.1', NEEDS_BEFORE, () => {
+  assert.equal(readFileSync(new URL('../prompts/detailed.md', import.meta.url), 'utf8'), gitShow('prompts/detailed.md', BEFORE_REF))
 })
 
-test('SR2-21 [R10] the detailed system prompt is identical to HEAD\'s in every partition', NEEDS_HEAD, async () => {
-  assert.equal(CURRENT.modePrompt('detailed'), HEAD.modePrompt('detailed'))
+test('SR2-21 [R10] the detailed system prompt is identical to 1.0.1\'s in every partition', NEEDS_BEFORE, async () => {
+  assert.equal(CURRENT.modePrompt('detailed'), BEFORE.modePrompt('detailed'))
   for (const [name, raw, over] of PROMPT_PARTITIONS) {
-    assert.equal(await sentSystem(CURRENT, 'detailed', raw, over), await sentSystem(HEAD, 'detailed', raw, over), name)
-    assert.equal(CURRENT.buildSystemPrompt('detailed', CURRENT.resolveConfig(raw), ['<extra>']), HEAD.buildSystemPrompt('detailed', HEAD.resolveConfig(raw), ['<extra>']), name + ' (built)')
+    assert.equal(await sentSystem(CURRENT, 'detailed', raw, over), await sentSystem(BEFORE, 'detailed', raw, over), name)
+    assert.equal(CURRENT.buildSystemPrompt('detailed', CURRENT.resolveConfig(raw), ['<extra>']), BEFORE.buildSystemPrompt('detailed', BEFORE.resolveConfig(raw), ['<extra>']), name + ' (built)')
   }
 })
 
-test('SR2-22 [Differential R10] detailed sends exactly the requests HEAD sent, shows the same cards and ends the same, in every scenario', NEEDS_HEAD, async () => {
+test('SR2-22 [Differential R10] detailed sends exactly the requests 1.0.1 sent, shows the same cards and ends the same, in every scenario', NEEDS_BEFORE, async () => {
   for (const scenario of SCENARIOS) {
-    assert.deepEqual(await play(CURRENT, 'detailed', scenario), await play(HEAD, 'detailed', scenario), scenario.name)
+    assert.deepEqual(await play(CURRENT, 'detailed', scenario), await play(BEFORE, 'detailed', scenario), scenario.name)
   }
 })
 
 // ================================================================ 11. light unchanged (R11)
 
-test('SR2-23 [R11] prompts/light.md is unchanged from HEAD', { skip: gitShow('prompts/light.md') === undefined ? 'no git checkout' : false }, () => {
-  assert.equal(readFileSync(new URL('../prompts/light.md', import.meta.url), 'utf8'), gitShow('prompts/light.md'))
+test('SR2-23 [R11] prompts/light.md is unchanged from 1.0.1', NEEDS_BEFORE, () => {
+  assert.equal(readFileSync(new URL('../prompts/light.md', import.meta.url), 'utf8'), gitShow('prompts/light.md', BEFORE_REF))
 })
 
-test('SR2-24 [R11] the light system prompt is identical to HEAD\'s in every partition', NEEDS_HEAD, async () => {
-  assert.equal(CURRENT.modePrompt('light'), HEAD.modePrompt('light'))
+test('SR2-24 [R11] the light system prompt is identical to 1.0.1\'s in every partition', NEEDS_BEFORE, async () => {
+  assert.equal(CURRENT.modePrompt('light'), BEFORE.modePrompt('light'))
   for (const [name, raw, over] of PROMPT_PARTITIONS) {
-    assert.equal(await sentSystem(CURRENT, 'light', raw, over), await sentSystem(HEAD, 'light', raw, over), name)
+    assert.equal(await sentSystem(CURRENT, 'light', raw, over), await sentSystem(BEFORE, 'light', raw, over), name)
   }
 })
 
-test('SR2-25 [Differential R11] light sends exactly the requests HEAD sent, shows the same cards and ends the same, in every scenario', NEEDS_HEAD, async () => {
+test('SR2-25 [Differential R11] light sends exactly the requests 1.0.1 sent, shows the same cards and ends the same, in every scenario', NEEDS_BEFORE, async () => {
   for (const scenario of SCENARIOS) {
-    assert.deepEqual(await play(CURRENT, 'light', scenario), await play(HEAD, 'light', scenario), scenario.name)
+    assert.deepEqual(await play(CURRENT, 'light', scenario), await play(BEFORE, 'light', scenario), scenario.name)
   }
 })
 

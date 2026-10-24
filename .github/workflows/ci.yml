@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history with tags: test/standard-rounds.test.mjs compares the build
+          # with the v1.0.1 release, and a shallow clone without tags skips those cases.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
