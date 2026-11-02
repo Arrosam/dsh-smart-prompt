@@ -20,7 +20,11 @@ import { asRecord } from './values.js'
 export interface AttachmentServices {
   /** `ctx.attachments.admitPromptContent`: validates and stores images, passes file refs through. */
   admit(parts: readonly unknown[]): Promise<readonly unknown[]>
-  /** `ctx.fileUploads.resolve` for the session's agent; undefined for an unknown receipt. */
+  /**
+   * `ctx.fileUploads.resolve` for the session's agent; undefined for an unknown receipt.
+   * DSH 0.2.1 returns the file reference itself; DSH 0.2.2 returns the staged attachment
+   * (`{ type: 'file' | 'image', attachment, … }`). {@link readAttachments} accepts both.
+   */
   resolveFile(sessionId: string, receiptId: string): unknown
   /** `ctx.attachments.readFileStream`: the stored file's bytes, in chunks. */
   readFile(ref: unknown, signal: AbortSignal): AsyncIterable<Uint8Array>
@@ -36,6 +40,18 @@ const TOTAL_FILE_CHARS = 60000
 interface FileRef { readonly name?: unknown; readonly bytes?: unknown }
 interface WireItem { readonly type?: unknown; readonly mediaType?: unknown; readonly data?: unknown; readonly name?: unknown; readonly receiptId?: unknown }
 interface AdmittedPart { readonly type?: unknown; readonly attachment?: unknown }
+interface StagedPart { readonly type?: unknown; readonly attachment?: unknown }
+
+/**
+ * The admission part for one resolved receipt. A staged attachment (DSH 0.2.2+) carries its
+ * kind and passes to admission as it is; a bare file reference (DSH 0.2.1, which has no
+ * `type` field) becomes a file part.
+ */
+function receiptPart(resolved: unknown): unknown {
+  const staged = resolved as StagedPart
+  if ((staged.type === 'file' || staged.type === 'image') && staged.attachment !== undefined && staged.attachment !== null) return resolved
+  return { type: 'file', attachment: resolved }
+}
 
 /**
  * Read the draft's attachments, in the order the user added them.
@@ -56,7 +72,7 @@ export async function readAttachments(services: AttachmentServices, sessionId: s
     if (item.type === 'file' && typeof item.receiptId === 'string') {
       const attachment = services.resolveFile(sessionId, item.receiptId)
       if (attachment === undefined || attachment === null) throw new Error('an attached file is no longer available; attach it again')
-      return { type: 'file', attachment }
+      return receiptPart(attachment)
     }
     throw new Error('unsupported attachment')
   })

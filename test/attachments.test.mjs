@@ -36,7 +36,7 @@ const storedImage = (id) => ({ attachmentId: 'sha256:' + id, mediaType: 'image/p
 
 /**
  * Stub host services: admit turns images into stored attachments and passes file parts
- * through; resolveFile looks receipts up in `files`; readFile streams `ref.data` in chunks
+ * through (stored images too); resolveFile looks receipts up in `files`; readFile streams `ref.data` in chunks
  * and counts how many bytes were pulled.
  */
 function stubServices(files = {}) {
@@ -45,7 +45,8 @@ function stubServices(files = {}) {
     log,
     async admit(parts) {
       log.admitted.push(parts)
-      return parts.map((p) => (p.type === 'image' ? { type: 'image', attachment: storedImage(p.data) } : p))
+      // Like host admission: an already stored image (DSH 0.2.2 upload receipt) passes through.
+      return parts.map((p) => (p.type !== 'image' ? p : 'attachment' in p ? { type: 'image', attachment: p.attachment } : { type: 'image', attachment: storedImage(p.data) }))
     },
     resolveFile(sessionId, receiptId) {
       log.resolved.push([sessionId, receiptId])
@@ -113,6 +114,26 @@ test('AT-05 [EP unknown receipt] a receipt the host does not know rejects withou
   const s = stubServices({})
   await assert.rejects(readAttachments(s, SID, [{ type: 'image', mediaType: 'image/png', data: 'AAAA' }, { type: 'file', receiptId: 'gone' }], signal()))
   assert.equal(s.log.admitted.length, 0)
+})
+
+test('AT-05a [EP staged file, DSH 0.2.2] a receipt resolving to {type:"file", attachment} is admitted as that part and read as text', async () => {
+  const ref = fileRef('a.txt', 'hello staged')
+  const staged = { type: 'file', attachment: ref }
+  const s = stubServices({ r1: staged })
+  const blocks = await readAttachments(s, SID, [{ type: 'file', receiptId: 'r1' }], signal())
+  assert.equal(s.log.admitted[0][0], staged, 'the staged part itself, not wrapped again')
+  assert.equal(s.log.reads[0].ref, ref, 'the file reference inside the staged part is read')
+  assert.deepEqual(blocks, [{ type: 'text', text: wrapped('a.txt', ref.bytes, 'hello staged') }])
+})
+
+test('AT-05b [EP staged image, DSH 0.2.2] a receipt resolving to a stored image passes to admission unchanged and becomes an image block', async () => {
+  const image = storedImage('up1')
+  const staged = { type: 'image', attachment: image, encodedBytes: 4 }
+  const s = stubServices({ r1: staged })
+  const blocks = await readAttachments(s, SID, [{ type: 'file', receiptId: 'r1' }], signal())
+  assert.deepEqual(s.log.admitted, [[staged]])
+  assert.equal(s.log.reads.length, 0, 'no file read for an image')
+  assert.deepEqual(blocks, [{ type: 'image', attachment: image }])
 })
 
 /** Assert that each bad item, placed after a valid one, rejects the whole read before admission. */

@@ -16,7 +16,11 @@
 export interface AttachmentServices {
     /** `ctx.attachments.admitPromptContent`: validates and stores images, passes file refs through. */
     admit(parts: readonly unknown[]): Promise<readonly unknown[]>;
-    /** `ctx.fileUploads.resolve` for the session's agent; undefined for an unknown receipt. */
+    /**
+     * `ctx.fileUploads.resolve` for the session's agent; undefined for an unknown receipt.
+     * DSH 0.2.1 returns the file reference itself; DSH 0.2.2 returns the staged attachment
+     * (`{ type: 'file' | 'image', attachment, … }`). {@link readAttachments} accepts both.
+     */
     resolveFile(sessionId: string, receiptId: string): unknown;
     /** `ctx.attachments.readFileStream`: the stored file's bytes, in chunks. */
     readFile(ref: unknown, signal: AbortSignal): AsyncIterable<Uint8Array>;
