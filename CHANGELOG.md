@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.2.1
+
+- **Next-step suggestions**: with the composer empty, in any mode, the star becomes the Stardea button, with the active mode's icon as a badge in its corner (a mode slide still works and only changes the badge). A click opens a panel above the composer with **2 suggestions** for what to ask the agent next, as cards side by side, read from the latest turns and the workspace knowledge file. Picking a card puts its sentence in the composer and keeps the panel open. Clicking the star again with the panel open adds 2 more as a new row. Closing the panel keeps the suggestions, and the next click shows them again without a new model call. Typing closes the panel, and the badge zooms back into the star's middle. The button waits until the agent has finished a reply.
+- **Suggest next steps automatically** (plugin settings, off by default): generates suggestions after every finished agent reply, even if you're not looking, and opens them when you come back to a session with an empty composer, unless you closed them for that reply. Costs one extra model call per reply.
+- The suggestion prompt lives in `prompts/next-steps.md` and can be overridden like the other prompts.
+
 ## 1.2.0
 
 - **A running animation per mode**: while a rewrite runs, the star's icon now plays an animation that fits its mode. **Detailed**: the star-pen moves along the handwriting line at the bottom of the page while the line is drawn under it, then the line fades and the pen goes back to write it again (1.4 s per line). **Light**: the lightning bolt strikes, with a quick double flash and a small jolt in size, then a short dim pause (0.9 s per strike). **Standard** keeps its spin. The animations start and stop with the rewrite like the spin always did, and are switched off when the system asks for reduced motion.
