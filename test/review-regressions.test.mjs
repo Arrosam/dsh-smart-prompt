@@ -279,7 +279,7 @@ test('RR-18 [BVA] maxQuestions: whole number >= 1, else 5', () => {
 })
 
 test('RR-19 [EP] null / non-object raw settings resolve to defaults', () => {
-  const expected = { mode: 'standard', modelSource: 'conversation', provider: '', model: '', reasoningEffort: '', maxQuestions: 5, sessionLookupRounds: 3, stardeaIdeas: 4, stardeaRounds: 1, stardeaWebSearch: false }
+  const expected = { mode: 'standard', modelSource: 'conversation', provider: '', model: '', reasoningEffort: '', maxQuestions: 5, sessionLookupRounds: 3, stardeaIdeas: 4, stardeaRounds: 1, stardeaWebSearch: false, autoSuggest: false }
   for (const raw of [undefined, null, 'light']) assert.deepEqual(readLiveSettings(raw), expected, String(raw))
 })
 

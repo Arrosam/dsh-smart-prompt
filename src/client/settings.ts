@@ -15,7 +15,7 @@
 
 import React from 'react'
 import {
-  DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, DEFAULT_MODE, DEFAULT_MODEL_SOURCE, DEFAULT_STARDEA_IDEAS, DEFAULT_STARDEA_ROUNDS,
+  DEFAULT_AUTO_SUGGEST, DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, DEFAULT_MODE, DEFAULT_MODEL_SOURCE, DEFAULT_STARDEA_IDEAS, DEFAULT_STARDEA_ROUNDS,
   DEFAULT_STARDEA_WEB_SEARCH, MAX_LOOKUP_ROUNDS, MAX_STARDEA_IDEAS, MAX_STARDEA_ROUNDS, MIN_LOOKUP_ROUNDS, MIN_MAX_QUESTIONS,
   MIN_STARDEA_IDEAS, MIN_STARDEA_ROUNDS, MODE_VALUES, MODEL_SOURCE_VALUES, isOneOf, type Mode, type ModelSource as Source,
 } from '../settings-fields.js'
@@ -38,6 +38,7 @@ export const FIELD = {
   stardeaIdeas: 'stardeaIdeas',
   stardeaRounds: 'stardeaRounds',
   stardeaWeb: 'stardeaWebSearch',
+  autoSuggest: 'autoSuggest',
 } as const
 
 /** Bounds and placeholder of one whole-number field; must match the host Config schema. */
@@ -154,6 +155,8 @@ export interface SettingsState extends Shell {
   stardeaRounds: string
   /** Whether Stardea may search the web, as staged (the default when nothing is saved). */
   stardeaWebSearch: boolean
+  /** Whether next-step suggestions run on their own after each agent reply, as staged. */
+  autoSuggest: boolean
   catalog: { status: 'idle' | 'loading' | 'ready' | 'error'; groups: readonly CatalogGroup[] }
 }
 
@@ -186,6 +189,7 @@ export function settingsSection(
     primitives.settingsTextField(FIELD.effort),
     ...NUMBER_KEYS.map((key) => primitives.settingsNumberField(NUMBER_FIELDS[key].field)),
     settingsFlagField(FIELD.stardeaWeb),
+    settingsFlagField(FIELD.autoSuggest),
   ])
   let catalog: SettingsState['catalog'] = { status: 'idle', groups: [] }
   const catalogListeners = new Set<() => void>()
@@ -209,6 +213,7 @@ export function settingsSection(
       effort: form.field(FIELD.effort).text,
       ...numbers,
       stardeaWebSearch: flagOf(form.field(FIELD.stardeaWeb).text, DEFAULT_STARDEA_WEB_SEARCH),
+      autoSuggest: flagOf(form.field(FIELD.autoSuggest).text, DEFAULT_AUTO_SUGGEST),
     }
   })
   // The model catalog is fetched state, not form state: merge it in with a cached
@@ -262,6 +267,7 @@ export function settingsSection(
     setStardeaIdeas: (text) => { base.edit(FIELD.stardeaIdeas, text) },
     setStardeaRounds: (text) => { base.edit(FIELD.stardeaRounds, text) },
     setStardeaWebSearch: (on) => { base.edit(FIELD.stardeaWeb, on ? FLAG_TEXT.on : FLAG_TEXT.off) },
+    setAutoSuggest: (on) => { base.edit(FIELD.autoSuggest, on ? FLAG_TEXT.on : FLAG_TEXT.off) },
     refreshCatalog,
   }
   if (stable.getSnapshot().source === 'dedicated') refreshCatalog()
@@ -288,6 +294,7 @@ export interface SettingsActions {
   setStardeaIdeas(text: string): void
   setStardeaRounds(text: string): void
   setStardeaWebSearch(on: boolean): void
+  setAutoSuggest(on: boolean): void
   refreshCatalog(): void
 }
 
@@ -434,6 +441,13 @@ export function SettingsSection(primitives: Primitives): (props: SettingsProps) 
         label: t('settingsStardeaWeb'),
         disabled,
         onChange: (next) => { props.setStardeaWebSearch(next) },
+      })),
+    row(t('settingsAutoSuggest'), t('settingsAutoSuggestHint'),
+      React.createElement(Switch, {
+        checked: state.autoSuggest,
+        label: t('settingsAutoSuggest'),
+        disabled,
+        onChange: (next) => { props.setAutoSuggest(next) },
       })),
     )
   }

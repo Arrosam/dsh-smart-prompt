@@ -59,7 +59,7 @@ export function asFollowUp(value: unknown): FollowUpInteraction | null {
  * Localized copy for a failure reply: the copy for its code, else the host's own message,
  * else the generic failure.
  */
-function failureText(data: ApiResponse, t: TFn): string {
+export function failureText(data: ApiResponse, t: TFn): string {
   const key = 'err_' + (typeof data.code === 'string' ? data.code : 'UNKNOWN')
   const localized = t(key)
   if (localized !== key) return localized
@@ -67,7 +67,7 @@ function failureText(data: ApiResponse, t: TFn): string {
 }
 
 /** Localized copy for a request that never got a reply. */
-function transportFailureText(error: unknown, t: TFn): string {
+export function transportFailureText(error: unknown, t: TFn): string {
   return isAbort(error) ? t('err_ABORTED') : t('err_UPSTREAM')
 }
 

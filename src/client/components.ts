@@ -14,6 +14,8 @@ import { claimOnboarding, dismissOnboarding, useOnboardingOpen } from './onboard
 import { cancelRefine, runImprove } from './refine.js'
 import { MODE_COPY } from './settings.js'
 import { clear, storeFor, subscribe, type AttachmentSerializer, type InputActionsFace, type Meta } from './store.js'
+import { autoSuggest, clickSuggest, closeOnEdit, dismissSuggest, pickSuggestion } from './suggest.js'
+import { SUGGEST_COLUMNS } from './styles.js'
 
 /** Localized copy lookup bound to the plugin namespace. */
 export type TFn = (key: string) => string
@@ -29,6 +31,11 @@ export interface SeatProps {
   input?: { draft?: unknown; phase?: unknown }
   /** Serializes draft attachments; absent on hosts without the conversation service. */
   serializeAttachments?: AttachmentSerializer
+  /**
+   * Selector hook over the session's lifecycle (ui-session); absent on older hosts, where the
+   * star cannot tell whether the agent is replying and suggestions are only made on demand.
+   */
+  useSession?: (selector: (state: unknown) => unknown) => unknown
   t: TFn
 }
 
@@ -71,6 +78,33 @@ function capsuleButton(className: string, icon: keyof typeof STROKE_ICON_PATH, t
 
 /** Four-point sparkle outline on a 16x16 grid, centred on (8, 8); the Stardea glyph reuses it. */
 export const SPARKLE_PATH = 'M8 1.2l1.35 3.9a2 2 0 001.25 1.25l3.9 1.35-3.9 1.35a2 2 0 00-1.25 1.25L8 14.8l-1.35-3.9a2 2 0 00-1.25-1.25L1.5 8.3l3.9-1.35A2 2 0 006.65 5.7L8 1.2z'
+
+/** Short burst rays (16x16 grid) on the diagonals between the Stardea star's four points. */
+const STARDEA_RAYS_PATH = 'M12.2 3.8L13.6 2.4M3.8 3.8L2.4 2.4M12.2 12.2L13.6 13.6M3.8 12.2L2.4 13.6'
+/** Shrinks the composer sparkle about its centre so the rays fit around it. */
+const STARDEA_STAR_TRANSFORM = 'translate(8 8) scale(.68) translate(-8 -8)'
+
+/**
+ * The Stardea glyph: a four-point star with burst rays. `pops` counts clicks: a new count
+ * remounts the svg, which replays the pop/burst animation in styles.ts once per click.
+ * Shared by the follow-up panel's Stardea buttons and the composer star's next-step face.
+ * The star sits in its own group because the animation's CSS transform would otherwise
+ * replace the path's shrinking transform.
+ */
+export function StardeaGlyph(pops: number): React.ReactElement {
+  return React.createElement('svg', {
+    key: pops,
+    className: 'dip-stardea-glyph',
+    viewBox: '0 0 16 16',
+    'data-pop': pops > 0 ? 'true' : 'false',
+    'aria-hidden': 'true',
+    focusable: 'false',
+  },
+  React.createElement('g', { className: 'dip-stardea-star' },
+    React.createElement('path', { d: SPARKLE_PATH, transform: STARDEA_STAR_TRANSFORM, fill: 'currentColor' })),
+  React.createElement('path', { className: 'dip-stardea-rays', d: STARDEA_RAYS_PATH, fill: 'none', stroke: 'currentColor', strokeWidth: '1.4', strokeLinecap: 'round' }),
+  )
+}
 
 /** One path of a mode glyph: filled with the text colour, or stroked with it. */
 interface GlyphPath {
@@ -158,6 +192,25 @@ function readAttachmentIds(props: SeatProps): readonly string[] {
   return Array.isArray(value) ? value as readonly string[] : NO_ATTACHMENTS
 }
 
+/** What the session's agent is doing, as far as next-step suggestions care. */
+interface AgentActivity {
+  /** The agent is replying now: there is no finished reply to suggest from yet. */
+  readonly running: boolean
+  /** Nothing was ever sent in this session. */
+  readonly blank: boolean
+}
+
+/** Without the lifecycle hook nothing is known, and the host decides (it refuses an empty session). */
+const ACTIVITY_UNKNOWN: AgentActivity = Object.freeze({ running: false, blank: false })
+
+/** Read the agent's activity from the injected session hook (two primitive selectors, so no new object per read). */
+function readActivity(props: SeatProps): AgentActivity {
+  if (typeof props.useSession !== 'function') return ACTIVITY_UNKNOWN
+  const running = props.useSession((state: unknown) => (state as { running?: unknown } | null)?.running === true)
+  const blank = props.useSession((state: unknown) => (state as { blank?: unknown } | null)?.blank === true)
+  return { running: running === true, blank: blank === true }
+}
+
 /** Force a re-render whenever this session's store entry changes. */
 export function useSessionState(sessionId: string | undefined): number {
   const [version, setVersion] = React.useState(0)
@@ -170,8 +223,14 @@ export function useSessionState(sessionId: string | undefined): number {
 
 /**
  * Composer button: one click replaces the draft in place; a second click while
- * busy cancels. Disabled on an empty composer or a slash command. While the composer
+ * busy cancels. Disabled on a slash command with no body. While the composer
  * still holds the refined text it renders as the Revert | Retry capsule instead.
+ *
+ * On an empty composer it turns into the next-step suggestion star (user decision): the Stardea
+ * glyph takes the middle and the mode glyph shrinks into the top-right corner, so a mode slide
+ * still works and only changes that corner. A click opens the suggestions (suggest.ts). Typing
+ * slides the Stardea glyph out and zooms the mode glyph back into the middle. Disabled until the
+ * agent has finished a reply to suggest from.
  */
 export function ImproveButton(props: SeatProps): React.ReactElement | null {
   const t = props.t
@@ -189,6 +248,11 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
   const blocked = split.body === ''
   const state = sessionId !== undefined ? storeFor(sessionId) : null
   const busy = state !== null && state.phase === 'busy'
+  const activity = readActivity(props)
+  // An empty composer (attachments do not count: a suggestion only fills in the text).
+  const suggestFace = !busy && draft.trim() === ''
+  const suggesting = state !== null && state.suggest.generating
+  const [pops, setPops] = React.useState(0)
   const actions = props.inputActions !== undefined ? props.inputActions : (state !== null ? state.actions : null)
 
   // Keep the store's composer faces fresh so Revert/Retry can write the draft and every
@@ -208,15 +272,39 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
       cancelRefine(sessionId, t)
       return
     }
+    if (draft.trim() === '') {
+      setPops((count: number) => count + 1)
+      clickSuggest(sessionId, t)
+      return
+    }
     runImprove(sessionId, draft, actions, t)
   }, [sessionId, actions, draft, t, slide.endsSlide])
 
+  // The suggestions belong to an empty composer: typing (or sending) closes them.
+  React.useEffect(() => { if (sessionId !== undefined) closeOnEdit(sessionId, draft) }, [sessionId, draft])
+
+  // Auto-suggest: whenever the session shows (it returns) and whenever the agent finishes a reply,
+  // fetch that reply's suggestions; the host made them already, or makes them once.
+  const draftNow = React.useRef(draft)
+  draftNow.current = draft
+  const auto = modeState.autoSuggest && !activity.blank
+  React.useEffect(() => {
+    if (sessionId === undefined || !auto || activity.running) return
+    void autoSuggest(sessionId, draftNow.current, t)
+  }, [sessionId, auto, activity.running, t])
+  // A message was sent and the agent is replying: the suggestions belong to the reply before it.
+  React.useEffect(() => { if (sessionId !== undefined && activity.running) dismissSuggest(sessionId) }, [sessionId, activity.running])
+
+  const noReplyYet = activity.blank || activity.running
+  const suggestOpen = state !== null && state.suggest.open
   const action = busy
     ? t('buttonTitleBusy')
-    : commandOnly ? t('commandOnlyTitle') : split.command !== '' ? t('buttonTitleCommand') : t('buttonTitle')
+    : suggestFace
+      ? noReplyYet ? t('suggestWaitTitle') : suggestOpen ? t('suggestMoreTitle') : t('suggestTitle')
+      : commandOnly ? t('commandOnlyTitle') : split.command !== '' ? t('buttonTitleCommand') : t('buttonTitle')
   const title = modeState.switchable ? action + '\n' + t('starDragHint') : action
 
-  const isDisabled = !busy && (blocked || actions === null)
+  const isDisabled = !busy && (suggestFace ? actions === null || noReplyYet : blocked || actions === null)
 
   // Refined = the composer still holds exactly the text we wrote. Editing or sending
   // the draft changes it, which returns the chip to the star with no extra bookkeeping.
@@ -259,6 +347,8 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
     className: 'dip-root',
     'data-busy': busy ? 'true' : 'false',
     'data-mode': modeState.mode,
+    'data-face': suggestFace ? 'suggest' : 'refine',
+    'data-suggesting': suggesting ? 'true' : 'false',
     ...slide.handlers,
   },
   React.createElement('button', {
@@ -266,12 +356,16 @@ export function ImproveButton(props: SeatProps): React.ReactElement | null {
     className: 'dip-btn',
     onMouseDown: keepComposerFocus,
     disabled: isDisabled,
-    'aria-label': t('buttonAria'),
+    'aria-label': suggestFace ? t('suggestAria') : t('buttonAria'),
+    'aria-expanded': suggestFace ? suggestOpen : undefined,
     'data-mode': modeState.mode,
     title,
     onClick,
   },
-  ModeIcon('dip-icon', modeState.mode),
+  // Both glyphs stay mounted, so the swap between the faces is one CSS transition (styles.ts).
+  React.createElement('span', { className: 'dip-face' },
+    ModeIcon('dip-icon', modeState.mode),
+    React.createElement('span', { className: 'dip-face-stardea', 'aria-hidden': 'true' }, StardeaGlyph(pops))),
   ),
   slide.bar !== null ? SlideBar({ view: slide.bar, t }) : null,
   )
@@ -361,6 +455,47 @@ export function OnboardingWindow(props: { t: TFn }): React.ReactElement | null {
     React.createElement('p', { className: 'dip-onboard-text dip-onboard-note' }, t('onboardingSettings')),
     React.createElement('div', { className: 'dip-onboard-foot' },
       React.createElement('button', { type: 'button', className: 'dip-onboard-ok', onMouseDown: keepComposerFocus, onClick: dismissOnboarding }, t('onboardingDismiss'))),
+  )
+}
+
+/**
+ * The next-step suggestions popover: floats over the composer card, above the star, spanning its
+ * width (user mock-up), so it takes no composer space. Suggestions are cards, two per row; each
+ * click on the star for more adds a row below. A card writes its sentence into the composer and
+ * the popover stays open, so another can replace it. Closing keeps the suggestions for the next click.
+ */
+export function SuggestPopover(props: { sessionId?: string; t: TFn; useInput?: SeatProps['useInput'] }): React.ReactElement | null {
+  const { sessionId, t } = props
+  useSessionState(sessionId)
+  // The composer's text marks the card just picked; empty on hosts without the input hook.
+  const draft = readDraft({ useInput: props.useInput, t })
+  const titleId = React.useId()
+  if (sessionId === undefined) return null
+  const state = storeFor(sessionId)
+  const suggest = state.suggest
+  if (!suggest.open) return null
+  const loading = suggest.generating
+  const footer = suggest.error !== null
+    ? React.createElement('p', { className: 'dip-suggest-foot', 'data-kind': 'error', role: 'alert' }, suggest.error)
+    : React.createElement('p', { className: 'dip-suggest-foot', role: 'status' }, loading ? t('suggestLoading') : t('suggestMoreHint'))
+  return React.createElement('div', { className: 'dip-suggest', role: 'dialog', 'aria-labelledby': titleId, 'aria-busy': loading, onClick: keepInOverlay },
+    React.createElement('div', { className: 'dip-suggest-head' },
+      React.createElement('p', { id: titleId, className: 'dip-suggest-title' }, t('suggestTitleHead')),
+      React.createElement('button', {
+        type: 'button', className: 'dip-onboard-close', 'aria-label': t('suggestClose'), title: t('suggestClose'),
+        onMouseDown: keepComposerFocus, onClick: () => { dismissSuggest(sessionId) },
+      }, StrokeIcon('dip-onboard-close-icon', 'close'))),
+    React.createElement('ul', { className: 'dip-suggest-list' },
+      ...suggest.suggestions.map((text) => React.createElement('li', { key: text },
+        React.createElement('button', {
+          type: 'button', className: 'dip-suggest-item', onMouseDown: keepComposerFocus,
+          'aria-pressed': draft.trim() === text,
+          onClick: () => { pickSuggestion(text, state.actions) },
+        }, text))),
+      // The row on its way: placeholder cards where it will land.
+      ...(loading ? Array.from({ length: SUGGEST_COLUMNS }, (_unused, index) => React.createElement('li', { key: 'loading-' + String(index), 'aria-hidden': 'true' },
+        React.createElement('div', { className: 'dip-suggest-item', 'data-loading': 'true' }))) : [])),
+    footer,
   )
 }
 

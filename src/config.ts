@@ -8,7 +8,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import {
-  DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, DEFAULT_MODE, DEFAULT_MODEL_SOURCE, DEFAULT_STARDEA_IDEAS, DEFAULT_STARDEA_ROUNDS,
+  DEFAULT_AUTO_SUGGEST, DEFAULT_LOOKUP_ROUNDS, DEFAULT_MAX_QUESTIONS, DEFAULT_MODE, DEFAULT_MODEL_SOURCE, DEFAULT_STARDEA_IDEAS, DEFAULT_STARDEA_ROUNDS,
   DEFAULT_STARDEA_WEB_SEARCH, MAX_LOOKUP_ROUNDS, MAX_STARDEA_IDEAS, MAX_STARDEA_ROUNDS, MIN_LOOKUP_ROUNDS, MIN_MAX_QUESTIONS,
   MIN_STARDEA_IDEAS, MIN_STARDEA_ROUNDS, MODE_VALUES, MODEL_SOURCE_VALUES, isOneOf, type Mode, type ModelSource,
 } from './settings-fields.js'
@@ -35,6 +35,8 @@ export interface LiveSettings {
   readonly stardeaRounds: number
   /** Whether Stardea may search the web (through DSH's web search service). */
   readonly stardeaWebSearch: boolean
+  /** Whether next-step suggestions are generated after every agent reply, without a click. */
+  readonly autoSuggest: boolean
 }
 
 /** Light-mode length ceiling: the rewrite may reach this multiple of the draft. */
@@ -124,6 +126,7 @@ export const Config = z.object({
   stardeaIdeas: z.natural().min(MIN_STARDEA_IDEAS).max(MAX_STARDEA_IDEAS).default(DEFAULT_STARDEA_IDEAS).volatile(),
   stardeaRounds: z.natural().max(MAX_STARDEA_ROUNDS).default(DEFAULT_STARDEA_ROUNDS).volatile(),
   stardeaWebSearch: z.boolean().default(DEFAULT_STARDEA_WEB_SEARCH).volatile(),
+  autoSuggest: z.boolean().default(DEFAULT_AUTO_SUGGEST).volatile(),
   reasoningEffort: z.string().default(DEFAULTS.reasoningEffort),
   logFailures: z.boolean().default(DEFAULTS.logFailures),
 })
@@ -156,6 +159,7 @@ export function readLiveSettings(raw: unknown): LiveSettings {
     stardeaIdeas: wholeInRange(live(c.stardeaIdeas), MIN_STARDEA_IDEAS, MAX_STARDEA_IDEAS, DEFAULT_STARDEA_IDEAS),
     stardeaRounds: wholeInRange(live(c.stardeaRounds), MIN_STARDEA_ROUNDS, MAX_STARDEA_ROUNDS, DEFAULT_STARDEA_ROUNDS),
     stardeaWebSearch: flag(live(c.stardeaWebSearch), DEFAULT_STARDEA_WEB_SEARCH),
+    autoSuggest: flag(live(c.autoSuggest), DEFAULT_AUTO_SUGGEST),
   }
 }
 

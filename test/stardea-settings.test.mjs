@@ -568,15 +568,16 @@ test('SS-31 [EP boolean spec] format and parse of the stardeaWebSearch spec', as
   for (const v of ['TRUE', 'yes', '1', ' true']) assert.equal(web.parse(v), undefined, JSON.stringify(v))
 })
 
-test('SS-32 [EP layout] four number inputs with the right bounds and placeholders, and one Switch', async () => {
+test('SS-32 [EP layout] four number inputs with the right bounds and placeholders, and two Switches (Stardea web, auto-suggest)', async () => {
   const { entry } = await bootSection()
   const { numberInputs, switches } = await mountSection(entry)
   const inputs = numberInputs()
   assert.equal(inputs.length, 4)
   const spec = inputs.map((n) => [n.props.placeholder, n.props.min === undefined ? undefined : Number(n.props.min), n.props.max === undefined ? undefined : Number(n.props.max)])
   assert.deepEqual(spec, [['5', 1, undefined], ['3', 0, 10], ['4', 1, 8], ['1', 0, 10]])
-  assert.equal(switches().length, 1)
+  assert.equal(switches().length, 2)
   assert.equal(switches()[0].props['aria-label'], 'settingsStardeaWeb', 'the Switch label is the row label')
+  assert.equal(switches()[1].props['aria-label'], 'settingsAutoSuggest')
 })
 
 test('SS-33 [State switch] checked follows the staged value (empty -> false); toggling stages "true" then "false"', async () => {
@@ -784,17 +785,17 @@ test('SS-46 [EP primitives] each required primitive missing or null: no settings
   }
 })
 
-test('SS-47 [EP row order] rows: method, model (+ dedicated picker), questions, lookup rounds, Stardea ideas, Stardea rounds, Stardea web', async () => {
+test('SS-47 [EP row order] rows: method, model (+ dedicated picker), questions, lookup rounds, Stardea ideas, Stardea rounds, Stardea web, auto-suggest', async () => {
   const { entry } = await bootSection({ value: { defaultMode: 'standard', modelSource: 'dedicated' } })
   const { renderer } = await mountSection(entry)
   const text = JSON.stringify(renderer.toJSON())
-  const labels = ['settingsMode', 'settingsModel', 'settingsMaxQuestions', 'settingsLookupRounds', 'settingsStardeaIdeas', 'settingsStardeaRounds', 'settingsStardeaWeb']
+  const labels = ['settingsMode', 'settingsModel', 'settingsMaxQuestions', 'settingsLookupRounds', 'settingsStardeaIdeas', 'settingsStardeaRounds', 'settingsStardeaWeb', 'settingsAutoSuggest']
   const at = labels.map((l) => text.indexOf('"' + l + '"'))
   assert.ok(at.every((i) => i >= 0), 'every row label is shown: ' + JSON.stringify(at))
   for (let i = 1; i < at.length; i += 1) assert.ok(at[i - 1] < at[i], labels[i - 1] + ' before ' + labels[i])
   const kinds = renderer.root.findAll((n) => n.type === 'select' || (n.type === 'input' && n.props.type === 'number') || (n.type === 'button' && n.props.role === 'switch'))
     .map((n) => (n.type === 'select' ? 'select' : n.type === 'input' ? 'number' : 'switch'))
-  assert.deepEqual(kinds, ['select', 'number', 'number', 'number', 'number', 'switch'], 'the dedicated picker sits under Model; the Switch is last')
+  assert.deepEqual(kinds, ['select', 'number', 'number', 'number', 'number', 'switch', 'switch'], 'the dedicated picker sits under Model; the Switches are last')
 })
 
 test('SS-48 [State switch] saved on: onChange(false) stages "false", onChange(true) stages "true", discard returns to the saved on', async () => {

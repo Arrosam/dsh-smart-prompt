@@ -20,6 +20,8 @@ export const ENDPOINT = Object.freeze({
   answer: 'answer',
   /** Drop a refine that waits for answers. */
   cancel: 'cancel',
+  /** Next-step suggestions for an empty composer: the ones made, or new ones on request. */
+  suggest: 'suggest',
 })
 
 export type Endpoint = typeof ENDPOINT[keyof typeof ENDPOINT]
@@ -43,6 +45,10 @@ export interface ApiResponse {
   meta?: Meta
   ask?: unknown
   ideas?: unknown
+  /** `/suggest`: every suggestion made for the conversation's current point. */
+  suggestions?: unknown
+  /** `/suggest`: identity of that point; a new agent reply changes it. */
+  key?: unknown
 }
 
 /**

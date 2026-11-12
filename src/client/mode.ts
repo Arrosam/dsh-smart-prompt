@@ -13,7 +13,7 @@
  */
 
 import React from 'react'
-import { DEFAULT_MODE, MODE_VALUES, isOneOf, type Mode } from '../settings-fields.js'
+import { DEFAULT_AUTO_SUGGEST, DEFAULT_MODE, MODE_VALUES, isOneOf, type Mode } from '../settings-fields.js'
 import { asRecord } from '../values.js'
 import { FIELD } from './settings.js'
 
@@ -108,10 +108,15 @@ export interface ModeState {
   readonly mode: Mode
   /** The host serves this plugin's settings and accepts writes; otherwise a slide changes nothing. */
   readonly switchable: boolean
+  /**
+   * The saved auto-suggest default (settings page), read from the same entry form as the mode so
+   * one subscription serves both; off without the form.
+   */
+  readonly autoSuggest: boolean
 }
 
 /** Without the host form the star shows the default mode and cannot switch. */
-const NO_FORM: ModeState = Object.freeze({ mode: DEFAULT_MODE, switchable: false })
+const NO_FORM: ModeState = Object.freeze({ mode: DEFAULT_MODE, switchable: false, autoSuggest: DEFAULT_AUTO_SUGGEST })
 
 let form: ModeForm | null = null
 /** The mode the latest slide wrote, until that write settles; `token` tells that write apart. */
@@ -124,13 +129,16 @@ function refresh(): void {
   let next = NO_FORM
   if (form !== null) {
     const snapshot = form.getSnapshot()
-    const saved = asRecord(snapshot.value)[FIELD.mode]
+    const value = asRecord(snapshot.value)
+    const saved = value[FIELD.mode]
+    const auto = value[FIELD.autoSuggest]
     next = {
       mode: pending !== null ? pending.mode : isOneOf(saved, MODE_VALUES) ? saved : DEFAULT_MODE,
       switchable: snapshot.status === FORM_READY && snapshot.writable === true,
+      autoSuggest: typeof auto === 'boolean' ? auto : DEFAULT_AUTO_SUGGEST,
     }
   }
-  if (next.mode === state.mode && next.switchable === state.switchable) return
+  if (next.mode === state.mode && next.switchable === state.switchable && next.autoSuggest === state.autoSuggest) return
   state = next
   for (const listener of listeners) {
     try { listener() } catch { /* one bad subscriber must not stop the rest */ }

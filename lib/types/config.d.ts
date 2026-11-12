@@ -25,6 +25,8 @@ export interface LiveSettings {
     readonly stardeaRounds: number;
     /** Whether Stardea may search the web (through DSH's web search service). */
     readonly stardeaWebSearch: boolean;
+    /** Whether next-step suggestions are generated after every agent reply, without a click. */
+    readonly autoSuggest: boolean;
 }
 /** Light-mode length ceiling: the rewrite may reach this multiple of the draft. */
 export declare const DEFAULT_LIGHT_MAX_RATIO = 2;
@@ -80,6 +82,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     stardeaIdeas: z<number, number, "volatile-defined">;
     stardeaRounds: z<number, number, "volatile-defined">;
     stardeaWebSearch: z<boolean, boolean, "volatile-defined">;
+    autoSuggest: z<boolean, boolean, "volatile-defined">;
     reasoningEffort: z<string, string, "defined">;
     logFailures: z<boolean, boolean, "defined">;
 }>>, Schemastery.ObjectT<NoInfer<{
@@ -106,6 +109,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     stardeaIdeas: z<number, number, "volatile-defined">;
     stardeaRounds: z<number, number, "volatile-defined">;
     stardeaWebSearch: z<boolean, boolean, "volatile-defined">;
+    autoSuggest: z<boolean, boolean, "volatile-defined">;
     reasoningEffort: z<string, string, "defined">;
     logFailures: z<boolean, boolean, "defined">;
 }>>, "plain">;

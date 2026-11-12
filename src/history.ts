@@ -174,9 +174,19 @@ export function collectTurns(messages: unknown, turns: number, totalChars: numbe
  */
 export function formatHistoryBlock(turns: readonly HistoryTurn[]): string {
   if (turns.length === 0) return ''
-  const body = turns
+  return referenceBlock('conversation_context',
+    'Recent turns of the conversation this draft belongs to (' + String(turns.length) + ' most recent).', 'it', formatTurns(turns))
+}
+
+/**
+ * Render turns as labelled speaker lines, oldest first: the body of {@link formatHistoryBlock},
+ * also framed on its own by next-step suggestions.
+ *
+ * @param turns - collected turns.
+ * @returns the rendered turns, '' for none.
+ */
+export function formatTurns(turns: readonly HistoryTurn[]): string {
+  return turns
     .map((turn) => TURN_LABEL.user + turn.user + '\n' + TURN_LABEL.assistant + turn.assistant)
     .join('\n\n')
-  return referenceBlock('conversation_context',
-    'Recent turns of the conversation this draft belongs to (' + String(turns.length) + ' most recent).', 'it', body)
 }

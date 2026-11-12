@@ -88,6 +88,30 @@ export interface AskRun {
   unpublish: () => void
 }
 
+/**
+ * Next-step suggestions for an empty composer. They outlive the popover: closing it keeps them,
+ * and the next click on the star shows them again without asking the model (user decision).
+ */
+export interface SuggestState {
+  /** Every suggestion made for the conversation's current point, oldest first. */
+  suggestions: readonly string[]
+  /** That point's identity, as the host reported it; '' before any reply. */
+  key: string
+  /** Whether the popover shows. */
+  open: boolean
+  /** The point whose popover the user closed: automatic runs do not reopen it. */
+  dismissedKey: string
+  /** The request in flight; aborting it stops waiting (the host keeps what it generates). */
+  controller: AbortController | null
+  /**
+   * Whether that request may generate: true for "more", or while nothing is shown yet. A reopen
+   * that only re-reads the made suggestions shows no progress, so it does not flicker.
+   */
+  generating: boolean
+  /** Why the last request gave nothing new, shown in the popover; null when it did. */
+  error: string | null
+}
+
 /** Per-session state. */
 export interface SessionState {
   phase: 'idle' | 'busy' | 'done' | 'error'
@@ -119,13 +143,16 @@ export interface SessionState {
    * for the answers); the draft they are about is `backup`.
    */
   ask: AskRun | null
+  /** Next-step suggestions (independent of the refine phase above). */
+  suggest: SuggestState
 }
 
 const states = new Map<string, SessionState>()
 const listeners = new Map<string, Set<() => void>>()
 
 function fresh(): SessionState {
-  return { phase: 'idle', backup: '', enhanced: '', meta: null, error: null, controller: null, actions: null, attachmentIds: [], serialize: null, doneBubbleOwner: null, ask: null }
+  return { phase: 'idle', backup: '', enhanced: '', meta: null, error: null, controller: null, actions: null, attachmentIds: [], serialize: null, doneBubbleOwner: null, ask: null,
+    suggest: { suggestions: [], key: '', open: false, dismissedKey: '', controller: null, generating: false, error: null } }
 }
 
 /** State for one session, created on first use. */

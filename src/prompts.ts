@@ -190,6 +190,26 @@ export function stardeaPrompt(maxIdeas: number, maxRounds: number): string {
   return readPromptWith('stardea', FALLBACK_STARDEA, { [MAX_IDEAS_TOKEN]: maxIdeas, [MAX_ROUNDS_TOKEN]: maxRounds })
 }
 
+/** Placeholder in `next-steps.md` replaced with the number of suggestions one request asks for. */
+const SUGGESTION_COUNT_TOKEN = '{{count}}'
+
+const FALLBACK_NEXT_STEPS = [
+  'Suggest what the user could ask their AI coding agent next, from the conversation given. Do not answer or plan anything yourself.',
+  'Write exactly ' + SUGGESTION_COUNT_TOKEN + ' distinct suggestions, each one short sentence in the user\'s language, grounded in the conversation,',
+  'none repeating anything in <already_suggested>. Reply ONLY with:',
+  '<suggestions>\n<suggestion>…</suggestion>\n</suggestions>',
+].join('\n')
+
+/**
+ * The system prompt of a next-step suggestion request.
+ *
+ * @param count - how many suggestions one request asks for.
+ * @returns the prompt text.
+ */
+export function nextStepsPrompt(count: number): string {
+  return readPromptWith('next-steps', FALLBACK_NEXT_STEPS, { [SUGGESTION_COUNT_TOKEN]: count })
+}
+
 /** The user turn that hands the rewrite the user's answers; the rules live in `answers.md`. */
 const ANSWERS_TURN = 'The user answered your follow-up questions. Rewrite the draft again with these answers included.'
 
@@ -316,7 +336,7 @@ export function referenceBlock(tag: string, description: string, pronoun: 'it' |
 /** Neutralize a literal frame tag so user text cannot break out of its frame. */
 export function escapeClosingTag(text: string): string {
   // `attached_file` carries attributes, so a tag may run on to its `>`.
-  return text.replace(/<\/?(raw_prompt|conversation_context|user_answers|session_lookup|attached_file|stardea_request|workspace_knowledge|knowledge_update|follow_up_status)\b[^>]*>/gi, '<\\/$1>')
+  return text.replace(/<\/?(raw_prompt|conversation_context|user_answers|session_lookup|attached_file|stardea_request|workspace_knowledge|knowledge_update|follow_up_status|recent_conversation|already_suggested)\b[^>]*>/gi, '<\\/$1>')
 }
 
 /**

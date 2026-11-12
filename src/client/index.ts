@@ -3,7 +3,8 @@
  *
  * Slot entries:
  * - `conversation.input.right` — the sparkle button in the composer tool row.
- * - `conversation.input.overlay` — the floating "improved · certificate" bubble, and the
+ * - `conversation.input.overlay` — the floating "improved · certificate" bubble, the next-step
+ *   suggestions popover (empty composer), and the
  *   first-use window that explains the star's mode slide. The host pins this slot's anchor at
  *   zero height to the top edge of the composer card, so neither takes layout space (the
  *   `conversation.input.dock` row the bubble used to sit in did).
@@ -19,7 +20,7 @@
  */
 
 import React from 'react'
-import { ImproveButton, OnboardingWindow, StatusBar, type TFn } from './components.js'
+import { ImproveButton, OnboardingWindow, StatusBar, SuggestPopover, type TFn } from './components.js'
 import { FollowUpPanel } from './follow-up.js'
 import { hostModule } from './host-modules.js'
 import { NS, en, zh } from './locales.js'
@@ -110,6 +111,9 @@ const SLOT = Object.freeze({
 
 /** Entry id of the follow-up panel in the composer chain. */
 const FOLLOW_UP_ENTRY_ID = 'dsh-smart-prompt-follow-up'
+
+/** Entry id of the next-step suggestions popover in the overlay slot. */
+const SUGGEST_ENTRY_ID = 'dsh-smart-prompt-suggest'
 
 /** Entry id of the first-use window in the overlay slot. */
 const ONBOARDING_ENTRY_ID = 'dsh-smart-prompt-onboarding'
@@ -278,6 +282,16 @@ export function apply(ctx: ClientContext): void {
       t,
     } as never),
     'status bar', 'status bar')
+
+  // Floating above the star, like the first-use window: the next-step suggestions.
+  registerComposerEntry(ctx, SLOT.bar, SUGGEST_ENTRY_ID,
+    (sessionId) => ({ sessionId }),
+    (slotProps) => React.createElement(SuggestPopover, {
+      sessionId: slotProps !== undefined && typeof slotProps.sessionId === 'string' ? slotProps.sessionId : undefined,
+      useInput: slotProps !== undefined && typeof slotProps.useInput === 'function' ? slotProps.useInput : undefined,
+      t,
+    } as never),
+    'next-step suggestions', 'next-step suggestions')
 
   // Composer seat: the follow-up panel. Like `configForms` below, `uiSession` may start after
   // this plugin, and it is never on the inject list, so the composer button never waits for it.

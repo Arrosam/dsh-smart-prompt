@@ -86,7 +86,7 @@ async function boot() {
   const { id, module } = await loadClientModule()
   const { ctx, registered } = fakeCtx()
   await TestRenderer.act(async () => { module.apply(ctx) })
-  return { id, module, registered, button: registered[0].component, bar: registered[1].component }
+  return { id, module, registered, button: registered[0].component, bar: registered[1].component, popover: registered[2].component }
 }
 
 /** A canned successful host reply. */
@@ -104,13 +104,13 @@ function okResponse(over = {}) {
   }
 }
 
-test('the built bundle registers exactly the two composer entries under the right ids', async () => {
+test('the built bundle registers exactly the three composer entries under the right ids', async () => {
   const { id, module, registered } = await boot()
   assert.equal(id, 'dsh-smart-prompt')
   assert.deepEqual(module.inject, ['slots', 'locale'])
-  assert.equal(registered.length, 2)
-  assert.deepEqual(registered.map((r) => r.options.name), ['conversation.input.right', 'conversation.input.overlay'])
-  assert.deepEqual(registered.map((r) => r.options.id), ['dsh-smart-prompt-button', 'dsh-smart-prompt-bar'])
+  assert.equal(registered.length, 3)
+  assert.deepEqual(registered.map((r) => r.options.name), ['conversation.input.right', 'conversation.input.overlay', 'conversation.input.overlay'])
+  assert.deepEqual(registered.map((r) => r.options.id), ['dsh-smart-prompt-button', 'dsh-smart-prompt-bar', 'dsh-smart-prompt-suggest'])
   for (const entry of registered) {
     assert.equal(entry.options.locale, 'dsh-smart-prompt', 'every entry is localizable')
     assert.equal(entry.options.inject('s9').sessionId, 's9', 'the session id reaches the component')
@@ -118,7 +118,7 @@ test('the built bundle registers exactly the two composer entries under the righ
   assert.equal(typeof registered[0].options.inject('s9').serializeAttachments, 'function', 'the button also gets the draft-attachment serializer')
 })
 
-test('the button renders enabled with a draft and disabled on an empty composer or a slash command', async () => {
+test('the button renders enabled with a draft, enabled for next steps on an empty composer, and disabled on a bare slash command', async () => {
   const { button } = await boot()
 
   const enabled = await mount(button, seatProps())
@@ -126,8 +126,11 @@ test('the button renders enabled with a draft and disabled on an empty composer 
   assert.equal(enabledBtn.props.disabled, false)
   assert.equal(enabled.root.findAllByProps({ className: 'dip-chevron' }).length, 0, 'no mode switch on the button')
 
+  // An empty composer turns the star into the next-step face (user requirement): clickable in every mode.
   const empty = await mount(button, seatProps({ draft: '   ' }))
-  assert.equal(empty.root.findAllByProps({ className: 'dip-btn' })[0].props.disabled, true)
+  assert.equal(empty.root.findAllByProps({ className: 'dip-btn' })[0].props.disabled, false)
+  assert.equal(empty.root.findAllByProps({ className: 'dip-root' })[0].props['data-face'], 'suggest')
+  assert.equal(enabled.root.findAllByProps({ className: 'dip-root' })[0].props['data-face'], 'refine')
 
   // A bare command has no body — nothing to rewrite. (A command WITH a body is
   // enhancable; that case is covered by the slash-command test below.)
@@ -405,7 +408,9 @@ test('the button is a single action: one capsule holding only the sparkle', asyn
   assert.deepEqual(chipChildren, ['dip-btn'], 'no mode switch, divider or decoration layers')
 
   const main = renderer.root.findAllByProps({ className: 'dip-btn' })[0]
-  assert.deepEqual(main.children.map((c) => (typeof c === 'string' ? c : c.props.className)), ['dip-icon'], 'icon only, no mode label')
+  assert.deepEqual(main.children.map((c) => (typeof c === 'string' ? c : c.props.className)), ['dip-face'], 'glyphs only, no mode label')
+  const face = renderer.root.findAllByProps({ className: 'dip-face' })[0]
+  assert.deepEqual(face.children.map((c) => c.props.className), ['dip-icon', 'dip-face-stardea'], 'the mode glyph and the next-step glyph')
   assert.equal(main.props['aria-label'], 'buttonAria', 'the accessible name no longer names a mode')
   assert.equal(renderer.root.findAllByProps({ className: 'dip-icon' })[0].props['aria-hidden'], 'true')
   assert.ok(!JSON.stringify(renderer.toJSON()).includes('dip-spark-grad'), 'the icon has no gradient')

@@ -13,7 +13,7 @@
  */
 import { type Mode, type ResolvedConfig } from './config.js';
 import { type SessionsFace } from './history.js';
-import { type LlmFace, type Route } from './llm-call.js';
+import { type CallFailure, type LlmFace, type Route } from './llm-call.js';
 import { type WebFace } from './lookups.js';
 import { type SeamAnswer } from './questions.js';
 import { type UsageReport } from './refine-chat.js';
@@ -35,6 +35,8 @@ export declare const ERR: {
     readonly UPSTREAM: "UPSTREAM";
     /** A follow-up request (Stardea, answers, cancel) names a refinement or question that is not open. */
     readonly NO_RUN: "NO_RUN";
+    /** Next-step suggestions were asked for a session with no finished exchange to build on. */
+    readonly NO_CONTEXT: "NO_CONTEXT";
     readonly UNKNOWN: "UNKNOWN";
 };
 /** Quality certificate returned on success. */
@@ -153,6 +155,21 @@ export interface ImproveInput {
     /** Whether Stardea requests may search the web; off by default. */
     readonly stardeaWebSearch?: boolean;
 }
+export declare function refuse(code: string, message: string): ImproveErr;
+/** The refusal for a failed model call; shared with next-step suggestions. */
+export declare function failureOf(failure: CallFailure, cfg: ResolvedConfig): ImproveErr;
+/**
+ * The model service and route a request of one session uses, or why there is none. Shared by
+ * refinements and next-step suggestions, so both pick the same model the same way.
+ *
+ * @param deps - host faces (model service, route sources).
+ * @param sessionId - the request's session, or '' for none.
+ */
+export declare function modelFor(deps: Pick<ImproveDeps, 'llm' | 'dedicated' | 'conversationModel' | 'selection' | 'lastRoute'>, sessionId: string): {
+    ok: true;
+    llm: LlmFace;
+    route: Route;
+} | ImproveErr;
 /**
  * Run one enhancement end to end.
  *

@@ -81,4 +81,12 @@ export declare function collectTurns(messages: unknown, turns: number, totalChar
  * @returns the block, or '' when there is nothing to carry.
  */
 export declare function formatHistoryBlock(turns: readonly HistoryTurn[]): string;
+/**
+ * Render turns as labelled speaker lines, oldest first: the body of {@link formatHistoryBlock},
+ * also framed on its own by next-step suggestions.
+ *
+ * @param turns - collected turns.
+ * @returns the rendered turns, '' for none.
+ */
+export declare function formatTurns(turns: readonly HistoryTurn[]): string;
 export {};

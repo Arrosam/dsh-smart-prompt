@@ -61,6 +61,13 @@ export const MAX_STARDEA_ROUNDS = 10
 export const DEFAULT_STARDEA_WEB_SEARCH = false
 
 /**
+ * Whether next-step suggestions run on their own after every agent reply when nothing is saved.
+ * Off: the user makes it the default on the settings page (user decision), since it costs one
+ * model call per agent reply.
+ */
+export const DEFAULT_AUTO_SUGGEST = false
+
+/**
  * Whether a value is one of a closed set of choices.
  *
  * @param value - anything.

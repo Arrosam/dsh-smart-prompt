@@ -51,6 +51,13 @@ export declare function answersPrompt(): string;
  */
 export declare function stardeaPrompt(maxIdeas: number, maxRounds: number): string;
 /**
+ * The system prompt of a next-step suggestion request.
+ *
+ * @param count - how many suggestions one request asks for.
+ * @returns the prompt text.
+ */
+export declare function nextStepsPrompt(count: number): string;
+/**
  * The user turn carrying the answers, sent after the first rewrite in the same conversation.
  *
  * @param answersBlock - the rendered `<user_answers>` block.

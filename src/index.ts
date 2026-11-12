@@ -28,18 +28,19 @@
 
 import z from '@deepseek-ai/schemastery'
 import { MODE_VALUES, maxRatioFor, readLiveSettings, resolveConfig, type LiveSettings, type Mode, type ResolvedConfig } from './config.js'
-import { improveDraft, ERR, type ImproveDeps, type ImproveOutcome, type SessionsFace } from './orchestrate.js'
+import { improveDraft, modelFor, ERR, type ImproveDeps, type ImproveOutcome, type SessionsFace } from './orchestrate.js'
 import type { LlmFace, Route } from './llm-call.js'
 import { AnswerMemory } from './answer-memory.js'
 import { readAttachments, type AttachmentServices } from './attachments.js'
 import { FollowUpDesk, NO_RUN, type Exchange } from './follow-up.js'
 import { liveMessages } from './history.js'
+import { NextStepBook, type NextStepsOutcome } from './next-steps.js'
 import type { WebFace } from './lookups.js'
 import type { SeamAnswer } from './questions.js'
 import { messagesOfLog } from './session-lookup.js'
 import { isOneOf } from './settings-fields.js'
 import { asRecord, errorMessage, trimmedText } from './values.js'
-import { fileKnowledgeStore, type KnowledgeStore } from './workspace-knowledge.js'
+import { fileKnowledgeStore, loadKnowledge, type KnowledgeStore } from './workspace-knowledge.js'
 
 /**
  * The slice of the Cordis host context this plugin touches.
@@ -68,7 +69,10 @@ export { Config } from './config.js'
 const API = '/dsh-smart-prompt/api'
 
 /** Endpoints under {@link API}. */
-const ENDPOINT = Object.freeze({ config: '/config', improve: '/improve', stardea: '/stardea', answer: '/answer', cancel: '/cancel' })
+const ENDPOINT = Object.freeze({ config: '/config', improve: '/improve', stardea: '/stardea', answer: '/answer', cancel: '/cancel', suggest: '/suggest' })
+
+/** What a `/suggest` body may ask for: the suggestions made (made once if none), or more. */
+const SUGGEST_REQUESTS = ['get', 'more'] as const
 
 /** Whether a request URL addresses one endpoint (a trailing slash is accepted). */
 function isEndpoint(url: string, endpoint: string): boolean {
@@ -233,6 +237,41 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
     }
   }
 
+  // Next-step suggestions per session; one generation per point of a conversation.
+  const nextSteps = new NextStepBook()
+  ctx.effect(() => () => { nextSteps.dispose() }, 'dsh-smart-prompt: next-step suggestions')
+
+  /**
+   * Next-step suggestions for one session. `more` asks for new ones; otherwise the ones made for
+   * the conversation's current point come back, generated once when there are none.
+   */
+  async function suggest(sessionId: string, more: boolean, signal: AbortSignal): Promise<NextStepsOutcome> {
+    const settings = readLiveSettings(rawConfig)
+    const target = modelFor(deps(settings), sessionId)
+    if (!target.ok) return target
+    const store = config.knowledgeChars > 0 ? knowledge(sessionId) : undefined
+    const loaded = store !== undefined ? await loadKnowledge(store, config.knowledgeChars) : undefined
+    let messages: unknown = []
+    // Same source as the refinement's context: a broken session store reads as no conversation.
+    try { messages = liveMessages(service('sessions') as SessionsFace | undefined, sessionId) } catch { messages = [] }
+    return nextSteps.request(sessionId, { llm: target.llm, route: target.route, config, messages, knowledge: loaded?.text ?? '' }, more, signal)
+  }
+
+  // Auto-suggest (settings page): generate after every completed agent reply, whether or not the
+  // user is looking, so the suggestions are ready when the session is next shown. Subagent
+  // sessions are skipped: nobody types into their composer.
+  ctx.on('session/event' as never, ((session: { id?: unknown; header?: { origin?: unknown } }, event: { type?: unknown; data?: { reason?: { kind?: unknown } } }) => {
+    if (event?.type !== TURN_END || event.data?.reason?.kind !== TURN_COMPLETED) return
+    if (typeof session?.id !== 'string' || session.header?.origin === SUBAGENT_ORIGIN) return
+    if (!readLiveSettings(rawConfig).autoSuggest) return
+    const sessionId = session.id
+    void suggest(sessionId, false, new AbortController().signal).then((outcome) => {
+      if (!outcome.ok && config.logFailures) log?.warn?.(LOG_PREFIX + 'auto-suggest ' + outcome.code + ': ' + outcome.message)
+    }, (error: unknown) => {
+      if (config.logFailures) log?.warn?.(LOG_PREFIX + 'auto-suggest: ' + errorMessage(error))
+    })
+  }) as never)
+
   // Host faces for one request, with the settings that request runs under.
   const deps = (settings: LiveSettings): ImproveDeps => {
     const defaults = service('agentDefaultModel') as { currentSelection?: () => unknown } | undefined
@@ -328,6 +367,14 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
             reply(next !== undefined ? exchangePayload(await next, started) : NO_RUN)
             return
           }
+          case ENDPOINT.suggest: {
+            const sessionId = trimmedText(input.sessionId)
+            if (sessionId === '' || !isOneOf(input.request, SUGGEST_REQUESTS)) { reply(badBody(BAD_BODY_MESSAGE.suggest)); return }
+            const outcome = await suggest(sessionId, input.request === 'more', controller.signal)
+            if (!outcome.ok && outcome.code !== ERR.ABORTED && config.logFailures) log?.warn?.(LOG_PREFIX + 'suggest ' + outcome.code + ': ' + outcome.message)
+            reply(outcome)
+            return
+          }
           default: {
             const runId = trimmedText(input.runId)
             if (runId === '') { reply(badBody(BAD_BODY_MESSAGE.cancel)); return }
@@ -387,13 +434,19 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
 }
 
 /** Endpoints that take a POST body. */
-const POST_ENDPOINTS = [ENDPOINT.improve, ENDPOINT.stardea, ENDPOINT.answer, ENDPOINT.cancel] as const
+const POST_ENDPOINTS = [ENDPOINT.improve, ENDPOINT.stardea, ENDPOINT.answer, ENDPOINT.cancel, ENDPOINT.suggest] as const
+
+/** The session event that ends an agent turn, the reason of one that finished normally, and a subagent session's origin. */
+const TURN_END = 'turn/end'
+const TURN_COMPLETED = 'completed'
+const SUBAGENT_ORIGIN = 'subagent'
 
 /** What a follow-up request body is missing. */
 const BAD_BODY_MESSAGE = Object.freeze({
   stardea: 'runId and questionId are required',
   answer: 'runId and an answers array are required',
   cancel: 'runId is required',
+  suggest: 'sessionId and a request of "get" or "more" are required',
 })
 
 function badBody(message: string): { ok: false; code: string; message: string } {

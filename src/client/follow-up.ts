@@ -10,7 +10,7 @@
  */
 
 import React from 'react'
-import { SPARKLE_PATH, StrokeIcon, useSessionState, type TFn } from './components.js'
+import { StardeaGlyph, StrokeIcon, useSessionState, type TFn } from './components.js'
 import { asFollowUp, cancelRefine, requestIdeas, setOwnWords, skipAsk, submitAsk, toggleIdea } from './refine.js'
 import { storeFor, type AskQuestion, type Idea } from './store.js'
 
@@ -20,32 +20,6 @@ const SOURCE_TAG_KEY: Readonly<Record<string, string>> = Object.freeze({
   conversation: 'sourceConversation',
   proposal: 'sourceProposal',
 })
-
-/** Short burst rays (16x16 grid) on the diagonals between the Stardea star's four points. */
-const STARDEA_RAYS_PATH = 'M12.2 3.8L13.6 2.4M3.8 3.8L2.4 2.4M12.2 12.2L13.6 13.6M3.8 12.2L2.4 13.6'
-/** Shrinks the composer sparkle about its centre so the rays fit around it. */
-const STARDEA_STAR_TRANSFORM = 'translate(8 8) scale(.68) translate(-8 -8)'
-
-/**
- * The Stardea glyph: a four-point star with burst rays. `pops` counts clicks: a new count
- * remounts the svg, which replays the pop/burst animation in styles.ts once per click.
- * The star sits in its own group because the animation's CSS transform would otherwise
- * replace the path's shrinking transform.
- */
-function StardeaGlyph(pops: number): React.ReactElement {
-  return React.createElement('svg', {
-    key: pops,
-    className: 'dip-stardea-glyph',
-    viewBox: '0 0 16 16',
-    'data-pop': pops > 0 ? 'true' : 'false',
-    'aria-hidden': 'true',
-    focusable: 'false',
-  },
-  React.createElement('g', { className: 'dip-stardea-star' },
-    React.createElement('path', { d: SPARKLE_PATH, transform: STARDEA_STAR_TRANSFORM, fill: 'currentColor' })),
-  React.createElement('path', { className: 'dip-stardea-rays', d: STARDEA_RAYS_PATH, fill: 'none', stroke: 'currentColor', strokeWidth: '1.4', strokeLinecap: 'round' }),
-  )
-}
 
 /** The Stardea button of one question; busy (and disabled) while its request runs. */
 function StardeaButton(props: { busy: boolean; t: TFn; onClick: () => void }): React.ReactElement {

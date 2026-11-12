@@ -51,6 +51,8 @@ export const ERR = {
   UPSTREAM: 'UPSTREAM',
   /** A follow-up request (Stardea, answers, cancel) names a refinement or question that is not open. */
   NO_RUN: 'NO_RUN',
+  /** Next-step suggestions were asked for a session with no finished exchange to build on. */
+  NO_CONTEXT: 'NO_CONTEXT',
   UNKNOWN: 'UNKNOWN',
 } as const
 
@@ -179,7 +181,7 @@ const MESSAGE = Object.freeze({
     + ' 字符，' + ratio + '），已保留原文；可切换到「轻」档或调高上限',
 })
 
-function refuse(code: string, message: string): ImproveErr {
+export function refuse(code: string, message: string): ImproveErr {
   return { ok: false, code, message }
 }
 
@@ -188,7 +190,8 @@ function aborted(): ImproveErr {
   return refuse(ERR.ABORTED, MESSAGE.ABORTED)
 }
 
-function failureOf(failure: CallFailure, cfg: ResolvedConfig): ImproveErr {
+/** The refusal for a failed model call; shared with next-step suggestions. */
+export function failureOf(failure: CallFailure, cfg: ResolvedConfig): ImproveErr {
   switch (failure.code) {
     case 'TIMEOUT':
       return refuse(ERR.TIMEOUT, MESSAGE.timeout(cfg.timeoutMs))
@@ -200,6 +203,31 @@ function failureOf(failure: CallFailure, cfg: ResolvedConfig): ImproveErr {
       return refuse(ERR.TOOL_CALL, MESSAGE.TOOL_CALL)
     default:
       return refuse(ERR.UPSTREAM, MESSAGE.upstream(failure.message))
+  }
+}
+
+/**
+ * The model service and route a request of one session uses, or why there is none. Shared by
+ * refinements and next-step suggestions, so both pick the same model the same way.
+ *
+ * @param deps - host faces (model service, route sources).
+ * @param sessionId - the request's session, or '' for none.
+ */
+export function modelFor(deps: Pick<ImproveDeps, 'llm' | 'dedicated' | 'conversationModel' | 'selection' | 'lastRoute'>, sessionId: string):
+  { ok: true; llm: LlmFace; route: Route } | ImproveErr {
+  const llm = deps.llm
+  if (llm === undefined) return refuse(ERR.NO_ROUTE, MESSAGE.NO_LLM)
+  try {
+    const route = resolveRoute({
+      dedicated: deps.dedicated,
+      conversation: sessionId !== '' && deps.conversationModel !== undefined ? deps.conversationModel(sessionId) : undefined,
+      defaults: deps.selection,
+      lastSeen: deps.lastRoute ?? null,
+    })
+    return { ok: true, llm, route }
+  } catch (error) {
+    if (error instanceof NoRouteError) return refuse(ERR.NO_ROUTE, MESSAGE.NO_ROUTE)
+    throw error
   }
 }
 
@@ -252,21 +280,9 @@ export async function improveDraft(deps: ImproveDeps, cfg: ResolvedConfig, input
   if (charLength(draft) > cfg.maxInputChars) {
     return refuse(ERR.TOO_LONG, MESSAGE.tooLong(charLength(draft), cfg.maxInputChars))
   }
-  const llm = deps.llm
-  if (llm === undefined) return refuse(ERR.NO_ROUTE, MESSAGE.NO_LLM)
-
-  let route: Route
-  try {
-    route = resolveRoute({
-      dedicated: deps.dedicated,
-      conversation: input.sessionId !== '' && deps.conversationModel !== undefined ? deps.conversationModel(input.sessionId) : undefined,
-      defaults: deps.selection,
-      lastSeen: deps.lastRoute ?? null,
-    })
-  } catch (error) {
-    if (error instanceof NoRouteError) return refuse(ERR.NO_ROUTE, MESSAGE.NO_ROUTE)
-    throw error
-  }
+  const target = modelFor(deps, input.sessionId)
+  if (!target.ok) return target
+  const { llm, route } = target
   const started = Date.now()
 
   // ---- workspace knowledge: read first, like workspace instructions ----

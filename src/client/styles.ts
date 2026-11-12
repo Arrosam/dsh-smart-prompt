@@ -82,6 +82,21 @@ const SLIDE_PAD_PX = SLIDE.insetPx - SLIDE.borderPx
 const PEN_WRITE = '1.4s ease-in-out infinite'
 /** One strike of the Light glyph while a rewrite runs: a fast flash, then a short pause. */
 const BOLT_STRIKE = '.9s ease-out infinite'
+/** Suggestion cards per row (user decision: two side by side), and below what panel width one column is used. */
+export const SUGGEST_COLUMNS = 2
+const SUGGEST_ONE_COLUMN_BELOW = '420px'
+/** A card's least height: two lines of a one-sentence suggestion, so the row reads as even boxes. */
+const SUGGEST_CARD_MIN_HEIGHT = '64px'
+/** Panel height cap: grows a row per click, then scrolls, keeping the transcript above visible. */
+const SUGGEST_MAX_HEIGHT = 'min(50vh,420px)'
+/** The swap between the star's two faces (refine glyph / next-step Stardea with the mode badge). */
+const FACE_SWAP = '220ms cubic-bezier(.2,.8,.2,1)'
+/**
+ * The mode badge on the next-step face: its scale, and its offset to the top-right corner (glyph px).
+ * Large enough to read the mode at a glance (user feedback: .55 was too small to make out).
+ */
+const BADGE_SCALE = '.8'
+const BADGE_OFFSET = 'translate(8px,-6px)'
 /** Length of one Stardea pop/burst; short enough to never delay reading the new ideas. */
 const STARDEA_POP = '420ms cubic-bezier(.2,.8,.2,1) both'
 
@@ -101,6 +116,17 @@ export const css = [
   '.dip-btn:focus-visible,.dip-revert:focus-visible,.dip-retry:focus-visible{box-shadow:' + FOCUS_RING + '}',
   '.dip-btn:disabled{cursor:default;color:var(--dsw-alias-label-tertiary)}',
   '.dip-icon{width:14px;height:14px;flex:none;display:block}',
+
+  /* ---------- the star's two faces: refine (mode glyph) and next steps (Stardea + mode badge) ---------- */
+  // Both glyphs stay mounted; data-face on the capsule moves between them with one transition.
+  '.dip-face{position:relative;display:grid;place-items:center;width:16px;height:16px}',
+  '.dip-face>.dip-icon,.dip-face-stardea{grid-area:1/1;transition:transform ' + FACE_SWAP + ',opacity ' + FACE_SWAP + '}',
+  '.dip-face-stardea{display:block;opacity:0;transform:translateX(-10px) scale(.6);pointer-events:none}',
+  '.dip-root[data-face="suggest"] .dip-face>.dip-icon{transform:' + BADGE_OFFSET + ' scale(' + BADGE_SCALE + ')}',
+  '.dip-root[data-face="suggest"] .dip-face-stardea{opacity:1;transform:translateX(-2px);color:var(--dsw-alias-state-business-primary)}',
+  '.dip-root[data-face="suggest"] .dip-btn:disabled .dip-face-stardea{color:inherit}',
+  // While suggestions are on the way the Stardea glyph turns, like the follow-up panel's.
+  '.dip-root[data-suggesting="true"] .dip-face-stardea .dip-stardea-glyph{animation:dip-icon-spin .8s linear infinite}',
   '.dip-capsule-icon{display:block;flex:none}',
 
   // The star takes horizontal touch slides (the mode bar) and leaves vertical ones to the page.
@@ -208,6 +234,36 @@ export const css = [
   '.dip-onboard-ok:hover{background:var(--dsw-alias-button-primary-hover,' + PRIMARY_FILL + ')}',
   '.dip-onboard-close:focus-visible,.dip-onboard-ok:focus-visible{box-shadow:' + FOCUS_RING + '}',
 
+  /* ---------- next-step suggestions (composer overlay, above the star) ---------- */
+  // Spans the composer card (user mock-up): two suggestion cards per row, each click on the star
+  // adding a row below. It floats over the transcript from the same zero-height anchor as the
+  // status bubble, so it takes no composer space; long lists scroll inside it.
+  '.dip-suggest{position:absolute;left:0;right:0;bottom:var(--dsh-composer-stack-gap,6px);z-index:1;box-sizing:border-box;',
+  'max-height:' + SUGGEST_MAX_HEIGHT + ';display:flex;flex-direction:column;padding:10px;border:1px solid var(--dsw-alias-border-l2);border-radius:' + PANEL_RADIUS + ';',
+  'background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-base));box-shadow:' + BUBBLE_SHADOW + ';',
+  'color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;animation:dip-bar-in 200ms cubic-bezier(.2,.8,.2,1) both}',
+  '.dip-suggest *{box-sizing:border-box}',
+  '.dip-suggest-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 8px 4px}',
+  '.dip-suggest-title{margin:0;font-size:12px;font-weight:500;line-height:18px;color:var(--dsw-alias-label-tertiary)}',
+  '.dip-suggest-list{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin:0;padding:0;list-style:none;',
+  'display:grid;grid-template-columns:repeat(' + String(SUGGEST_COLUMNS) + ',minmax(0,1fr));gap:8px}',
+  // One column when the composer is narrower than two readable cards.
+  '@container (max-width:' + SUGGEST_ONE_COLUMN_BELOW + '){.dip-suggest-list{grid-template-columns:minmax(0,1fr)}}',
+  '.dip-suggest{container-type:inline-size}',
+  '.dip-suggest-item{display:flex;align-items:flex-start;width:100%;height:100%;min-height:' + SUGGEST_CARD_MIN_HEIGHT + ';padding:10px 12px;',
+  'border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);outline:none;background:var(--dsw-alias-bg-base);',
+  'color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;text-align:left;overflow-wrap:anywhere;cursor:pointer;',
+  'transition:background-color .12s,border-color .12s}',
+  '.dip-suggest-item:hover{background:' + HOVER_BG + ';border-color:var(--dsw-alias-border-l4,var(--dsw-alias-border-l2))}',
+  '.dip-suggest-item:focus-visible{box-shadow:' + FOCUS_RING + '}',
+  // The card just picked: the composer now holds it.
+  '.dip-suggest-item[aria-pressed="true"]{border-color:var(--dsw-alias-state-business-primary)}',
+  '.dip-suggest-foot{flex:none;margin:8px 4px 0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}',
+  '.dip-suggest-foot[data-kind="error"]{color:var(--dsw-alias-state-error-primary)}',
+  // Placeholder cards while a row is on the way.
+  '.dip-suggest-item[data-loading="true"]{cursor:progress;background:' + HOVER_BG + ';border-style:dashed;animation:dip-suggest-pulse 1.2s ease-in-out infinite}',
+  '@keyframes dip-suggest-pulse{0%,100%{opacity:.55}50%{opacity:1}}',
+
   /* ---------- follow-up panel (composer seat) ---------- */
   // Same seat frame as the host's question card, so swapping the composer for the panel
   // does not shift the column.
@@ -287,6 +343,7 @@ export const css = [
   /* ---------- motion preferences ---------- */
   '@media (prefers-reduced-motion: reduce){',
   '.dip-icon,.dip-slide,.dip-slide-thumb,.dip-slide-seg,.dip-btn,.dip-revert,.dip-retry,.dip-bar,.dip-bar-retry,.dip-idea,.dip-ask-btn,.dip-stardea,.dip-onboard,',
+  '.dip-face-stardea,.dip-suggest,.dip-suggest-item,.dip-suggest-item[data-loading="true"],',
   '.dip-stardea-glyph,.dip-stardea-star,.dip-stardea-rays,.dip-glyph-pen,.dip-glyph-ink{animation:none!important;transition-duration:.01ms!important}',
   '}',
 ].join('\n')
